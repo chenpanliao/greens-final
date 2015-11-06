@@ -4,6 +4,7 @@ library(relaimpo)
 library(QuantPsyc)
 library(vegan)
 library(xtable)
+library(magrittr)
 library(tidyr)
 library(ggplot2)
 library(hydroGOF)
@@ -912,6 +913,8 @@ pred.dGsimAll.rda.bic <- predict(fit.o$RDA.BIC, dGsimAll)
 ## heatmap RDA.AIC
 # x <- as.matrix(data.frame(Prediction = pred.dGsimAll.rda.aic/10, dGsimAll)) [ order(pred.dGsimAll.rda.aic), ]
 x <- data.frame(Prediction = pred.dGsimAll.rda.aic/10, dGsimAll) %>% as.matrix %>% .[order(-pred.dGsimAll.rda.aic),]
+colnames(x) %<>% gsub("G([a-z]{1})", "\\1", .)
+colnames(x)[-1] %<>% toupper
 quartz(width=7, height=7)
 par(family = "Noto Sans CJK TC", cex=10/12)
 hv <- heatmap(
@@ -933,6 +936,8 @@ dev.off()
 ## heatmap RDA.BIC
 # x <- as.matrix(data.frame(Prediction = pred.dGsimAll.rda.bic/10, dGsimAll)) [ order(pred.dGsimAll.rda.bic), ]
 x <- data.frame(Prediction = pred.dGsimAll.rda.bic/10, dGsimAll) %>% decostand(., "standardize", 2) %>% as.matrix %>% .[order(-pred.dGsimAll.rda.bic),]
+colnames(x) %<>% gsub("G([a-z]{1})", "\\1", .)
+colnames(x)[-1] %<>% toupper
 quartz(width=7, height=7)
 par(family = "Noto Sans CJK TC", cex=10/12)
 hv <- heatmap(
