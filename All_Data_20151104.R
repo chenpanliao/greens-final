@@ -149,6 +149,10 @@ dev.off()
 # 去除 Gx > 8000
 # 面積以列標準化為 sum = 1
 # NO=="640" 很怪
+# isAreaNormalization <- F
+isAreaMeanCentering <- T
+isTotalSameArea <- T # 總和調成 1
+isUnknownAreaIgnored <- T # 不理 X 其它總和調成 1
 dt <- d %>%
   na.omit %>%
   subset(., X+A+B+C+D+E+F+G+H+I+J+K+L+M >= 5000) %>%
@@ -157,13 +161,15 @@ dt <- d %>%
 dim(dt); str(dt)
 # 環境資料
 # 一次項
-dG1t1 <- dt %>%
-  .[, grep("^[A-Z]$", names(.)) ] %>%
-  decostand(., "total", 1) %>% # 總和調成 1
-  .[, !colnames(.) %in% "X" ] %>% decostand(., "total", 1)  # 要不要不理 X 其它總和調成 1
+dG1t1 <- dt %>% .[, grep("^[A-Z]$", names(.)) ]
+if (isUnknownAreaIgnored == T)
+  dG1t1 %<>% .[, !colnames(.) %in% "X" ]
+if (isTotalSameArea)
+  dG1t1 %<>% decostand(., "total", 1)
 dG1t1Mean <- dG1t1 %>% colMeans # 求 col mean
+if (isAreaMeanCentering)
+  dG1t1 %<>% apply(., 2, function(x){x-mean(x)}) # 中心化
 dG1t1 %<>% .[, !colnames(.) %in% c("X", "G", "H", "K", "L", "M")  ] %>%
-  apply(., 2, function(x){x-mean(x)}) %>%  # 中心化
   as.data.frame
   dim(dG1t1); head(dG1t1)
 # # 二次項
@@ -882,7 +888,14 @@ dt %>% .[order( dB0t.pred$PCA.AIC.p) , ] %>%
   head(., 20) %>% .[, c(2:17, 22:25)] %>%
   xtable(., digits=c(rep(0,17), rep(3,4))) %>%
   print(., NA.string="---")
-
+dt %>% .[order(-dB0t.pred$RDA.AIC.p) , ] %>%
+  head(., 20) %>% .[, c(2:17, 22:25)] %>%
+  xtable(., digits=c(rep(0,17), rep(3,4))) %>%
+  print(., NA.string="---")
+dt %>% .[order( dB0t.pred$RDA.AIC.p) , ] %>%
+  head(., 20) %>% .[, c(2:17, 22:25)] %>%
+  xtable(., digits=c(rep(0,17), rep(3,4))) %>%
+  print(., NA.string="---")
 
 
 
