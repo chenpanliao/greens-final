@@ -150,7 +150,7 @@ dev.off()
 # 面積以列標準化為 sum = 1
 # NO=="640" 很怪
 # isAreaNormalization <- F
-isAreaMeanCentering <- T
+isAreaMeanCentering <- F
 isTotalSameArea <- T # 總和調成 1
 isUnknownAreaIgnored <- T # 不理 X 其它總和調成 1
 dt <- d %>%
