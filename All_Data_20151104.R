@@ -153,16 +153,16 @@ dt <- d %>%
   na.omit %>%
   subset(., X+A+B+C+D+E+F+G+H+I+J+K+L+M >= 5000) %>%
   subset(., X+A+B+C+D+E+F+G+H+I+J+K+L+M <= 15000) %>%
-  subset(., X <= 8000) #  %>% subset(., NO!="640")
+  subset(., X <= 8000)
 dim(dt); str(dt)
-
 # 環境資料
 # 一次項
 dG1t1 <- dt %>%
   .[, grep("^[A-Z]$", names(.)) ] %>%
   decostand(., "total", 1) %>% # 總和調成 1
-  .[, !colnames(.) %in% "X" ] %>% decostand(., "total", 1) %>%  # 要不要不理 X 其它總和調成 1
-  .[, !colnames(.) %in% c("X", "G", "H", "K", "L", "M")  ] %>%
+  .[, !colnames(.) %in% "X" ] %>% decostand(., "total", 1)  # 要不要不理 X 其它總和調成 1
+dG1t1Mean <- dG1t1 %>% colMeans # 求 col mean
+dG1t1 %<>% .[, !colnames(.) %in% c("X", "G", "H", "K", "L", "M")  ] %>%
   apply(., 2, function(x){x-mean(x)}) %>%  # 中心化
   as.data.frame
   dim(dG1t1); head(dG1t1)
@@ -345,18 +345,17 @@ dev.off()
 dB0t.pred <- data.frame(
   # `CCA.AIC.p` = predict(lm.cca.aic, dG1t),
   # `CCA.BIC.p` = predict(lm.cca.bic, dG1t),
-  MDS.AIC.p = predict(fit.o$MDS.AIC, dG1t),
-  MDS.BIC.p = predict(fit.o$MDS.BIC, dG1t),
-  FA.AIC.p  = predict(fit.o$FA.AIC, dG1t),
-  FA.BIC.p  = predict(fit.o$FA.BIC, dG1t),
   PCA.AIC.p = predict(fit.o$PCA.AIC, dG1t),
   PCA.BIC.p = predict(fit.o$PCA.BIC, dG1t),
+  FA.AIC.p  = predict(fit.o$FA.AIC, dG1t),
+  FA.BIC.p  = predict(fit.o$FA.BIC, dG1t),
+  MDS.AIC.p = predict(fit.o$MDS.AIC, dG1t),
+  MDS.BIC.p = predict(fit.o$MDS.BIC, dG1t),
   RDA.AIC.p = predict(fit.o$RDA.AIC, dG1t),
   RDA.BIC.p = predict(fit.o$RDA.BIC, dG1t)
   # RDA.AICd.p = predict(mlm.rda.bic, dG1t),
   # RDA.BICd.p = predict(mlm.rda.bic, dG1t)
 )
-
 quartz(width=9, height=9)
 par(mfrow=c(1,4), cex=6/12)
 pairs(
@@ -874,7 +873,15 @@ dev.off()
 
 
 
+############ 檢視預測
+dt %>% .[order(-dB0t.pred$PCA.AIC.p) , ] %>% head(., 10)
+dt %>% .[order( dB0t.pred$PCA.AIC.p) , ] %>% head(., 10)
 
+dB0t %>% .[order(-dB0t.pred$PCA.AIC.p) , ] %>% head(., 20)
+dB0t %>% .[order( dB0t.pred$PCA.AIC.p) , ] %>% head(., 20)
+
+dG1t %>% .[order(-dB0t.pred$PCA.AIC.p) , ] %>% head(., 20)
+dG1t %>% .[order( dB0t.pred$PCA.AIC.p) , ] %>% head(., 20)
 
 
 
@@ -885,93 +892,45 @@ dev.off()
 
 
 # ##################### 亂數模型
-#
-# length(pred.pca.aic <- predict(fit.o$PCA.AIC, dG1t))
-# length(pred.rda.bic <- predict(fit.o$RDA.BIC, dG1t))
-# dt.pred <- data.frame( dt, pred.pca.aic, pred.rda.bic  )
-# head(dt.pred[order(-dt.pred$pred.pca.aic), ])
-# data.frame(a=1:5,b=2:6) - matrix(rep(colMeans(data.frame(a=1:5,b=2:6)), 5), ncol=2, byrow=T)
-# fakeDateEnv <- new.env()
-# with(fakeDateEnv, {
-#   rown <- 5000    # 5000列假點
-#   coln <- 13      # 13類假面積
-#   dt <- runif(rown * coln) %>% matrix(., ncol = coln, nrow = rown) %>% as.data.frame %>% decostand(., "total", 1)
-#
-# })
-#
-# # 環境資料
+# #### 創造假資料
+# rown <- 500000    # 5000列假點
+# coln <- 13      # 13類假面積
+# set.seed(52004800)
 # # 一次項
-# dG1t1 <- dt %>%
-#   .[, grep("^[A-Z]$", names(.)) ] %>%
-#   decostand(., "total", 1) %>% # 總和調成 1
-#   .[, !colnames(.) %in% "X" ] %>% decostand(., "total", 1) %>%  # 要不要不理 X 其它總和調成 1
-#   .[, !colnames(.) %in% c("X", "G", "H", "K", "L", "M")  ] %>%
-#   apply(., 2, function(x){x-mean(x)}) %>%  # 中心化
+# dG1t1.Fake <- runif(rown * coln) %>%
+#   matrix(., ncol = coln, nrow = rown) %>%
+#   decostand(., "total", 1) %>%
 #   as.data.frame
-#   dim(dG1t1); head(dG1t1)
-# # # 二次項
-# dG1t2 <- dG1t1^2 %>% as.data.frame
-#   names(dG1t2) %<>% paste0(., "2")
-#   dim(dG1t2); head(dG1t2)
+#   names(dG1t1.Fake) <- LETTERS[1:13]
+# dG1t1.Fake <- dG1t1.Fake - matrix(rep(dG1t1Mean, rown), ncol=coln, byrow=T)
+# # 二次項
+# dG1t2.Fake <- dG1t1.Fake^2 %>% as.data.frame
+#   names(dG1t2.Fake) %<>% paste0(., "2")
 # # 交互作用項
-# dG1tI <- model.matrix(~(.)^2, dG1t1) %>%
+# dG1tI.Fake <- model.matrix(~(.)^2, dG1t1.Fake) %>%
 #   as.data.frame %>%
 #   .[, grep(":", colnames(.))] %>%
 #   as.data.frame
-# names(dG1tI) %<>% gsub(":", "", .) ; dim(dG1tI); head(dG1tI)
-# # 結合三者 # 減去沒用的交互作用
-# dG1t <- cbind(dG1t1, dG1t2, dG1tI) %>%
+#   names(dG1tI.Fake) %<>% gsub(":", "", .)
+# # 結合
+# dG1t.Fake <- cbind(dG1t1.Fake, dG1t2.Fake, dG1tI.Fake) %>%
 #   as.data.frame %>%
-#   .[, colSums(.) != 0] %>% .[!colnames(.) %in% c("C2","F2","AC","AF","BC","BF","CD","CE","CF","CI","CJ","DF","EF","EI","EJ","FI","FJ")]
-# str(dG1t)
-#
-#
-# # #### 創造假資料
-# rown <- 500000
-# dG1t.simu0 <- dG1t[rep(1,rown),1:8]
-# rownames(dG1t.simu0) <- NULL
-# set.seed(52004800)
-# dG1t.simu0[,] <- runif(ncol(dG1t.simu0) * rown)
-# dG1t.simu0 <- decostand(dG1t.simu0, "total")
-# head(dG1t.simu0)
-#
-# # dG1t.simu0 完成：rowSums() 為 1
-# dG1t.simu1 <- as.data.frame(apply(dG1t.simu0, 2, function(x){x-mean(x)}))
-# tmp <- as.data.frame(dG1t.simu1^2); names(tmp) <- paste0(names(tmp), "2")
-# dG1t.simu2 <- cbind(as.data.frame(model.matrix(~(.)^2, dG1t.simu1)), tmp)  [,-1]
-# names(dG1t.simu2) <- gsub(":", "", names(dG1t.simu2))
-# names(dG1t.simu2);colMeans(dG1t.simu2);dim(dG1t.simu2)
-#   # 減去沒用的交互作用 -GbGc -GbGf -GcGd -GcGf -GcGi -GcGj -GfGi -GfGj
-# dG1t.simu3 <- dG1t.simu2[!colnames(dG1t.simu2) %in% c("GaGc","GaGf","GbGc","GbGf","GcGd","GcGe","GcGf","GcGi","GcGj","GdGf","GeGf","GfGi","GfGj","Gc2","Gf2")]
-# dim(dG1t.simu3);head(dG1t.simu3)
-# # dG1t.simu3 完成：已建好二次式和交互作用
-#
+#   .[, colSums(.) != 0] #%>%   .[!colnames(.) %in% c("C2","F2","AC","AF","BC","BF","CD","CE","CF","CI","CJ","DF","EF","EI","EJ","FI","FJ")]
+# str(dG1t.Fake)
 # #### 代入迴歸式
-# pred.rda.aic <- predict(fit.o$RDA.AIC, dG1t.simu3)
-# pred.rda.bic <- predict(fit.o$RDA.BIC, dG1t.simu3)
-#
+# pred.pca.aic <- predict(fit.o$PCA.AIC, dG1t.Fake)
+# pred.rda.aic <- predict(fit.o$RDA.AIC, dG1t.Fake)
 # #### Top 20 sites pca.aic
 # t.first <- cbind(
-#   Bio = pred.rda.aic[order(-pred.rda.aic)[1:20]],
-#   dG1t.simu0[order(-pred.rda.aic)[1:20], ]*100
+#   Bio = pred.pca.aic[order(-pred.pca.aic)[1:20]],
+#   dG1t.Fake[order(-pred.pca.aic)[1:20], ] %>%
+#     .[colnames(.) %in% LETTERS[1:13]] + matrix(rep(dG1t1Mean, rown), ncol=coln, byrow=T)
 # )
-# #### Top -20 sites
+# # #### Top -20 sites
 # t.last <- cbind(
-#   Bio = pred.rda.aic[order(pred.rda.aic)[1:20]],
-#   dG1t.simu0[order(pred.rda.aic)[1:20], ]*100
-# )
-# xtable(round(t.first, 2))
-# xtable(round(t.last,  2))
-#
-# #### Top 20 sites rda.bic
-# t.first <- cbind(
-#   Bio = pred.rda.bic[order(-pred.rda.bic)[1:20]],
-#   dG1t.simu0[order(-pred.rda.bic)[1:20], ]*100
-# )
-# #### Top -20 sites
-# t.last <- cbind(
-#   Bio = pred.rda.bic[order(pred.rda.bic)[1:20]],
-#   dG1t.simu0[order(pred.rda.bic)[1:20], ]*100
+#   Bio = pred.pca.aic[order(pred.pca.aic)[1:20]],
+#   dG1t.Fake[order(pred.pca.aic)[1:20], ] %>%
+#     .[colnames(.) %in% LETTERS[1:13]] + matrix(rep(dG1t1Mean, rown), ncol=coln, byrow=T)
 # )
 # xtable(round(t.first, 2))
 # xtable(round(t.last,  2))
