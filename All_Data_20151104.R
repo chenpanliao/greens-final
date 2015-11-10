@@ -209,6 +209,8 @@ dev.off()
 
 
 ## 求原始生態資料降維後分數 Bscore.o
+stepDirection <- "both"
+stepDirection <- "forward"
 Bscore.o <- data.frame(NO = dt$NO)
 fitPCA <- function(dt){
   fit <- princomp(dt, cor=F)
@@ -244,7 +246,7 @@ fitRDA <- function(dtB, dtG){
   fit.full <- vegan::rda(dtB ~ . , data=dtG, scale=F)
   fit.null <- vegan::rda(dtB ~ 1 , data=dtG, scale=F)
   fit.start <- vegan::rda(dtB ~ A+B+C+D+E+F+I+J, data=dtG, scale=F)
-  fit <- ordiR2step(fit.start, scope = list(upper=formula(fit.full), lower=formula(fit.null)), direction="both")
+  fit <- ordiR2step(fit.start, scope = list(upper=formula(fit.full), lower=formula(fit.null)), direction=stepDirection)
   score <- summary(fit)$sites[,1]
   loading <- t(summary(fit)$species[,1])
   if(mean(loading < 0)) {score <- -score; loading <- -loading}
@@ -282,7 +284,7 @@ for(i in 1:length(fit.o)) {
   m0 <- lm(Bscore.o[,-1][[ p[i] ]] ~ 1 , data=dG1t)
   m2 <- lm(Bscore.o[,-1][[ p[i] ]] ~ . , data=dG1t)
   this.k <- ifelse(i %% 2 == 1, 2, log(nrow(dG1t)))
-  fit.o[[i]] <- stats::step(m1, scope = list(upper = formula(m2), lower = formula(m0)), k = this.k, direction = "both", trace=1)
+  fit.o[[i]] <- stats::step(m1, scope = list(upper = formula(m2), lower = formula(m0)), k = this.k, direction = stepDirection, trace=1)
 }
 # 結合係數成data.frame: coefM.o
 {coefM.o <- multimerge(lapply(fit.o, function(x){data.frame(coef(x))}))} %>%
@@ -477,25 +479,8 @@ dB0t.dG1t.VD <- apply(mapply(c, dB0t.VD, dG1t.VD), 2, function(this){as.data.fra
 
 
 
-## multiple regression: diversity ~ area^1 + area^2 + interaction(among area^1)
-fit.o <-  vector(mode = "list", 8)
-names(fit.o) <- paste( c("PCA", "PCA", "FA", "FA", "MDS", "MDS", "RDA", "RDA"), rep(c("AIC", "BIC"), 4), sep="." )
-for(i in 1:length(fit.o)) {
-  p <- c(1,1,2,2,3,3,4,4)
-  m1 <- lm(Bscore.o[,-1][[ p[i] ]] ~ A+B+C+D+E+F+I+J , data=dG1t)
-  m0 <- lm(Bscore.o[,-1][[ p[i] ]] ~ 1 , data=dG1t)
-  m2 <- lm(Bscore.o[,-1][[ p[i] ]] ~ . , data=dG1t)
-  this.k <- ifelse(i %% 2 == 1, 2, log(nrow(dG1t)))
-  fit.o[[i]] <- stats::step(m1, scope = list(upper = formula(m2), lower = formula(m0)), k = this.k, direction = "both", trace=1)
-}
-# 結合係數成data.frame: coefM.o
-{coefM.o <- multimerge(lapply(fit.o, function(x){data.frame(coef(x))}))} %>%
-  print %>%
-  xtable(., digits=4) %>%
-  print(., NA.string="---")
-# show vif
-{coefVifM.o <- fit.o %>% lapply(., vif) %>% multimerge} %>%
-  print %>% xtable(., digits=3) %>%  print(., NA.string="---")
+
+
 
 
 #### 10-fold CV 找哪個模型 fit.o[[i]] 最好
@@ -534,7 +519,7 @@ for(i in 1:length(TD.row)){
     m0 <- lm(Bscore.TD[[i]] [[ p[j] ]] ~ 1 , data=dG1t.TD[[i]])
     m2 <- lm(Bscore.TD[[i]] [[ p[j] ]] ~ . , data=dG1t.TD[[i]])
     this.k <- ifelse(j %% 2 == 1, 2, log(nrow(dG1t.TD[[i]])))
-    fit.TD[[i]][[j]] <- stats::step(m1, scope = list(upper = formula(m2), lower = formula(m0)), k = this.k, direction = "both", trace=1)
+    fit.TD[[i]][[j]] <- stats::step(m1, scope = list(upper = formula(m2), lower = formula(m0)), k = this.k, direction = stepDirection, trace=1)
   }
 
   # 以訓練出的 fit.TD$xxx.yIC 模型，求 dG1t.VD 的預測值
@@ -642,7 +627,7 @@ for(i in 1:length(TD.row)){
     m0 <- lm(Bscore.TD[[i]] [[ p[j] ]] ~ 1 , data=dG1t.TD[[i]])
     m2 <- lm(Bscore.TD[[i]] [[ p[j] ]] ~ . , data=dG1t.TD[[i]])
     this.k <- ifelse(j %% 2 == 1, 2, log(nrow(dG1t.TD[[i]])))
-    fit.TD[[i]][[j]] <- stats::step(m1, scope = list(upper = formula(m2), lower = formula(m0)), k = this.k, direction = "both", trace=1)
+    fit.TD[[i]][[j]] <- stats::step(m1, scope = list(upper = formula(m2), lower = formula(m0)), k = this.k, direction = stepDirection, trace=1)
   }
 
   # 以 fit.TD[[i]]$xxx.yIC 模型，求 dG1t.TD 的預測值 Bscore.TD.pred
@@ -709,16 +694,6 @@ for(i in 1:length(TD.row)){
   Bscore.VD[[i]]$NO <- NULL
 
   # multiple regression: Bscore.TD[[i]]$xxx ~ ., data=dG1t.TD
-  # fit.TD[[i]] <- list()
-  # fit.TD[[i]]$PCA.AIC <- stats::step(lm(Bscore.TD[[i]]$PCA ~ . , data=dG1t.TD[[i]]), scope=list(upper = ~., lower = ~1))
-  # fit.TD[[i]]$PCA.BIC <- stats::step(lm(Bscore.TD[[i]]$PCA ~ . , data=dG1t.TD[[i]]), scope=list(upper = ~., lower = ~1), k = log(nrow(dG1t.TD[[i]])))
-  # fit.TD[[i]]$FA.AIC  <- stats::step(lm(Bscore.TD[[i]]$FA  ~ . , data=dG1t.TD[[i]]), scope=list(upper = ~., lower = ~1))
-  # fit.TD[[i]]$FA.BIC  <- stats::step(lm(Bscore.TD[[i]]$FA  ~ . , data=dG1t.TD[[i]]), scope=list(upper = ~., lower = ~1), k = log(nrow(dG1t.TD[[i]])))
-  # fit.TD[[i]]$MDS.AIC <- stats::step(lm(Bscore.TD[[i]]$MDS ~ . , data=dG1t.TD[[i]]), scope=list(upper = ~., lower = ~1))
-  # fit.TD[[i]]$MDS.BIC <- stats::step(lm(Bscore.TD[[i]]$MDS ~ . , data=dG1t.TD[[i]]), scope=list(upper = ~., lower = ~1), k = log(nrow(dG1t.TD[[i]])))
-  # fit.TD[[i]]$RDA.AIC <- stats::step(lm(Bscore.TD[[i]]$RDA ~ . , data=dG1t.TD[[i]]), scope=list(upper = ~., lower = ~1))
-  # fit.TD[[i]]$RDA.BIC <- stats::step(lm(Bscore.TD[[i]]$RDA ~ . , data=dG1t.TD[[i]]), scope=list(upper = ~., lower = ~1), k = log(nrow(dG1t.TD[[i]])))
-  # multiple regression: Bscore.TD[[i]]$xxx ~ ., data=dG1t.TD
   fit.TD[[i]] <-  vector(mode = "list", 8)
   names(fit.TD[[i]]) <- paste( c("PCA", "PCA", "FA", "FA", "MDS", "MDS", "RDA", "RDA"), rep(c("AIC", "BIC"), 4), sep="." )
   for(j in 1:length(fit.TD[[i]])) {
@@ -727,7 +702,7 @@ for(i in 1:length(TD.row)){
     m0 <- lm(Bscore.TD[[i]] [[ p[j] ]] ~ 1 , data=dG1t.TD[[i]])
     m2 <- lm(Bscore.TD[[i]] [[ p[j] ]] ~ . , data=dG1t.TD[[i]])
     this.k <- ifelse(j %% 2 == 1, 2, log(nrow(dG1t.TD[[i]])))
-    fit.TD[[i]][[j]] <- stats::step(m1, scope = list(upper = formula(m2), lower = formula(m0)), k = this.k, direction = "both", trace=1)
+    fit.TD[[i]][[j]] <- stats::step(m1, scope = list(upper = formula(m2), lower = formula(m0)), k = this.k, direction = stepDirection, trace=1)
   }
 
   # 以 fit.TD[[i]]$xxx.yIC 模型，求 dG1t.TD 的預測值 Bscore.TD.pred
