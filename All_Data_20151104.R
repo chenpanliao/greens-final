@@ -874,15 +874,14 @@ dev.off()
 
 
 ############ 檢視預測
-dt %>% .[order(-dB0t.pred$PCA.AIC.p) , ] %>% head(., 10)
-dt %>% .[order( dB0t.pred$PCA.AIC.p) , ] %>% head(., 10)
-
-dB0t %>% .[order(-dB0t.pred$PCA.AIC.p) , ] %>% head(., 20)
-dB0t %>% .[order( dB0t.pred$PCA.AIC.p) , ] %>% head(., 20)
-
-dG1t %>% .[order(-dB0t.pred$PCA.AIC.p) , ] %>% head(., 20)
-dG1t %>% .[order( dB0t.pred$PCA.AIC.p) , ] %>% head(., 20)
-
+dt %>% .[order(-dB0t.pred$PCA.AIC.p) , ] %>%
+  head(., 20) %>% .[, c(2:17, 22:25)] %>%
+  xtable(., digits=c(rep(0,17), rep(3,4))) %>%
+  print(., NA.string="---")
+dt %>% .[order( dB0t.pred$PCA.AIC.p) , ] %>%
+  head(., 20) %>% .[, c(2:17, 22:25)] %>%
+  xtable(., digits=c(rep(0,17), rep(3,4))) %>%
+  print(., NA.string="---")
 
 
 
