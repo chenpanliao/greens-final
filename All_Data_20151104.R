@@ -210,7 +210,7 @@ dev.off()
 
 ## 求原始生態資料降維後分數 Bscore.o
 stepDirection <- "both"
-stepDirection <- "forward"
+# stepDirection <- "forward"
 Bscore.o <- data.frame(NO = dt$NO)
 fitPCA <- function(dt){
   fit <- princomp(dt, cor=F)
