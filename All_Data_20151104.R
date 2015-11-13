@@ -11,7 +11,9 @@ require(hydroGOF)
 require(car)
 library(MuMIn)
 mds.try.n <- 30
-
+NRMSE <- function(sim, obs){
+  hydroGOF::rmse(sim, obs) / sd(obs)
+}
 multimerge <- function(x, ...) {
   if(!is.list(x)) stop("x must be a list.")
   y <- x[[1]]
@@ -243,10 +245,11 @@ fitMDS <- function(dt){
   return((score - mean(score))/sd(score))
 }
 fitRDA <- function(dtB, dtG){
-  fit.full <- vegan::rda(dtB ~ . , data=dtG, scale=F)
-  fit.null <- vegan::rda(dtB ~ 1 , data=dtG, scale=F)
-  fit.start <- vegan::rda(dtB ~ A+B+C+D+E+F+I+J, data=dtG, scale=F)
-  fit <- ordiR2step(fit.start, scope = list(upper=formula(fit.full), lower=formula(fit.null)), direction=stepDirection)
+  # fit.full <- vegan::rda(dtB ~ . , data=dtG, scale=F)
+  # fit.null <- vegan::rda(dtB ~ 1 , data=dtG, scale=F)
+  # fit.start <- vegan::rda(dtB ~ A+B+C+D+E+F+I+J, data=dtG, scale=F)
+  # fit <- ordiR2step(fit.start, scope = list(upper=formula(fit.full), lower=formula(fit.null)), direction=stepDirection)
+  fit <- vegan::rda(dtB ~ ., data=dtG, scale=F)
   score <- summary(fit)$sites[,1]
   loading <- t(summary(fit)$species[,1])
   if(mean(loading < 0)) {score <- -score; loading <- -loading}
@@ -277,7 +280,10 @@ dev.off()
 
 ## multiple regression: diversity ~ area^1 + area^2 + interaction(among area^1)
 fit.o <-  vector(mode = "list", 8)
-names(fit.o) <- paste( c("PCA", "PCA", "FA", "FA", "MDS", "MDS", "RDA", "RDA"), rep(c("AIC", "BIC"), 4), sep="." )
+names(fit.o) <- paste(
+  c("PCA", "PCA", "FA", "FA", "MDS", "MDS", "RDA", "RDA"),
+  rep(c("AIC", "BIC"), 4),
+  sep="." )
 for(i in 1:length(fit.o)) {
   p <- c(1,1,2,2,3,3,4,4)
   m1 <- lm(Bscore.o[,-1][[ p[i] ]] ~ A+B+C+D+E+F+I+J , data=dG1t)
@@ -290,10 +296,17 @@ for(i in 1:length(fit.o)) {
 {coefM.o <- multimerge(lapply(fit.o, function(x){data.frame(coef(x))}))} %>%
   print %>%
   xtable(., digits=4) %>%
-  print(., NA.string="---")
-# show vif
+  print(., NA.string="---", booktabs=T)
+# show vif table
 {coefVifM.o <- fit.o %>% lapply(., vif) %>% multimerge} %>%
-  print %>% xtable(., digits=3) %>%  print(., NA.string="---")
+  print %>% xtable(., digits=3) %>%  print(., NA.string="---", booktabs=T)
+# show vif figures
+# quartz(width=10, height=5)
+# par(mar=c(4,4,1,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=10/12, mfrow=c(2,4), las=2)
+# for(i in 1:length(fit.o)){
+#   bp <- barplot(coefVifM.o[,i], beside=T, legend.text=T, ylim=c(0,10), col=8, ylab="VIF")
+#   axis(1, bp, rownames(coefVifM.o))
+# }
 
 
 # 結合標準化係數成data.frame: coefM.o.std 使用 QuantPsyc::lm.beta()
@@ -384,10 +397,10 @@ rbind(
   `Adjusted R2` = sapply(fit.o, FUN = function(fit) {summary(fit)$adj.r.squared} ),
   `AIC/1000` = sapply(fit.o, AIC) / 1000,
   `BIC/1000` = sapply(fit.o, BIC) / 1000
-) %>% print %>% xtable(., digits=3)
+) %>% print %>% xtable(., digits=3) %>% print.xtable(booktabs=T)
 quartz(width=7, height=2)
 par(mar=c(4,4,0,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=10/12)
-boxplot(sapply(fit.o, resid), xlab="模型", ylab="殘差", las=1)
+boxplot(sapply(fit.o, resid) %>% scale(., center=F), xlab="模型", ylab="標準化殘差", las=1)
 quartz.save("slide/resid最佳迴歸法.png", dpi=300, type="png")
 # quartz.save("./slide/resid最佳迴歸法.pdf", type="pdf")
 dev.off()
@@ -491,22 +504,30 @@ Bscore.VD <- list()
 fit.TD <- list()
 Bscore.TD.pred <- list()
 for(i in 1:length(TD.row)){
-# for(i in 1:2){
   # 結合已降維的 dB0t.TD[[i]] 成 Bscore.TD[[i]]
   Bscore.TD[[i]] <- data.frame(NO = dt$NO[TD.row[[i]]])
-  Bscore.TD[[i]]$PCA <- Bscore.o$PCA[TD.row[[i]]]
-  Bscore.TD[[i]]$FA  <- Bscore.o$FA[TD.row[[i]]]
-  Bscore.TD[[i]]$MDS <- Bscore.o$MDS[TD.row[[i]]]
-  Bscore.TD[[i]]$RDA <- Bscore.o$RDA[TD.row[[i]]]
+  Bscore.TD[[i]]$PCA.AIC <- Bscore.o[TD.row[[i]],]$PCA
+  Bscore.TD[[i]]$PCA.BIC <- Bscore.o[TD.row[[i]],]$PCA
+  Bscore.TD[[i]]$FA.AIC  <- Bscore.o[TD.row[[i]],]$FA
+  Bscore.TD[[i]]$FA.BIC  <- Bscore.o[TD.row[[i]],]$FA
+  Bscore.TD[[i]]$MDS.AIC <- Bscore.o[TD.row[[i]],]$MDS
+  Bscore.TD[[i]]$MDS.BIC <- Bscore.o[TD.row[[i]],]$MDS
+  Bscore.TD[[i]]$RDA.AIC <- Bscore.o[TD.row[[i]],]$RDA
+  Bscore.TD[[i]]$RDA.BIC <- Bscore.o[TD.row[[i]],]$RDA
   rownames(Bscore.TD[[i]]) <- dt$NO[TD.row[[i]]]
   Bscore.TD[[i]]$NO <- NULL
 
   # 結合已降維的 dB0t.VD[[i]] 成 Bscore.VD[[i]]
   Bscore.VD[[i]] <- data.frame(NO = dt$NO[VD.row[[i]]])
-  Bscore.VD[[i]]$PCA.AIC <- Bscore.VD[[i]]$PCA.BIC <- Bscore.o$PCA[VD.row[[i]]]
-  Bscore.VD[[i]]$FA.AIC  <- Bscore.VD[[i]]$FA.BIC  <- Bscore.o$FA[VD.row[[i]]]
-  Bscore.VD[[i]]$MDS.AIC <- Bscore.VD[[i]]$MDS.BIC <- Bscore.o$MDS[VD.row[[i]]]
-  Bscore.VD[[i]]$RDA.AIC <- Bscore.VD[[i]]$RDA.BIC <- Bscore.o$RDA[VD.row[[i]]]
+  Bscore.VD[[i]]$PCA.AIC <- Bscore.o[VD.row[[i]],]$PCA
+  Bscore.VD[[i]]$PCA.BIC <- Bscore.o[VD.row[[i]],]$PCA
+  Bscore.VD[[i]]$FA.AIC  <- Bscore.o[VD.row[[i]],]$FA
+  Bscore.VD[[i]]$FA.BIC  <- Bscore.o[VD.row[[i]],]$FA
+  Bscore.VD[[i]]$MDS.AIC <- Bscore.o[VD.row[[i]],]$MDS
+  Bscore.VD[[i]]$MDS.BIC <- Bscore.o[VD.row[[i]],]$MDS
+  Bscore.VD[[i]]$RDA.AIC <- Bscore.o[VD.row[[i]],]$RDA
+  Bscore.VD[[i]]$RDA.BIC <- Bscore.o[VD.row[[i]],]$RDA
+
   rownames(Bscore.VD[[i]]) <- dt$NO[VD.row[[i]]]
   Bscore.VD[[i]]$NO <- NULL
 
@@ -514,10 +535,9 @@ for(i in 1:length(TD.row)){
   fit.TD[[i]] <-  vector(mode = "list", 8)
   names(fit.TD[[i]]) <- paste( c("PCA", "PCA", "FA", "FA", "MDS", "MDS", "RDA", "RDA"), rep(c("AIC", "BIC"), 4), sep="." )
   for(j in 1:length(fit.TD[[i]])) {
-    p <- c(1,1,2,2,3,3,4,4)
-    m1 <- lm(Bscore.TD[[i]] [[ p[j] ]] ~ A+B+C+D+E+F+I+J , data=dG1t.TD[[i]])
-    m0 <- lm(Bscore.TD[[i]] [[ p[j] ]] ~ 1 , data=dG1t.TD[[i]])
-    m2 <- lm(Bscore.TD[[i]] [[ p[j] ]] ~ . , data=dG1t.TD[[i]])
+    m1 <- lm(Bscore.TD[[i]] [[j]] ~ A+B+C+D+E+F+I+J , data=dG1t.TD[[i]])
+    m0 <- lm(Bscore.TD[[i]] [[j]] ~ 1 , data=dG1t.TD[[i]])
+    m2 <- lm(Bscore.TD[[i]] [[j]] ~ . , data=dG1t.TD[[i]])
     this.k <- ifelse(j %% 2 == 1, 2, log(nrow(dG1t.TD[[i]])))
     fit.TD[[i]][[j]] <- stats::step(m1, scope = list(upper = formula(m2), lower = formula(m0)), k = this.k, direction = stepDirection, trace=1)
   }
@@ -542,15 +562,18 @@ Bscore.VD.求最佳迴歸法 <- do.call("rbind", Bscore.VD)
 dim(Bscore.TD.pred.求最佳迴歸法) ; dim(Bscore.VD.求最佳迴歸法)
 names(Bscore.TD.pred.求最佳迴歸法) ; names(Bscore.VD.求最佳迴歸法)
 # 看看誰最好
-rbind(NRMSE = sqrt(colSums((Bscore.TD.pred.求最佳迴歸法 - Bscore.VD.求最佳迴歸法)^2) / nrow(Bscore.TD.pred.求最佳迴歸法)) / apply(Bscore.VD.求最佳迴歸法, 2, sd))  %>% print %>% xtable(., digits=4)
-quartz(width=7, height=2.5)
-par(mar=c(4,4,0,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=8/12)
+rbind(
+  # NRMSE = sqrt(colSums((Bscore.TD.pred.求最佳迴歸法 - Bscore.VD.求最佳迴歸法)^2) / nrow(Bscore.TD.pred.求最佳迴歸法)) / apply(Bscore.VD.求最佳迴歸法, 2, sd)
+  NRMSE = rmse(Bscore.TD.pred.求最佳迴歸法, Bscore.VD.求最佳迴歸法) / apply(Bscore.VD.求最佳迴歸法, 2, sd),
+  `Pearson r` = cor(Bscore.TD.pred.求最佳迴歸法, Bscore.VD.求最佳迴歸法) %>% diag,
+  `Kendall tau` = cor(Bscore.TD.pred.求最佳迴歸法, Bscore.VD.求最佳迴歸法, method="kendall") %>% diag
+  )  %>% print %>% xtable(., digits=4) %>% print(., booktabs=T)
+quartz(width=7, height=1.5)
+par(mar=c(2,4,0,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=8/12)
 boxplot(  Bscore.TD.pred.求最佳迴歸法 - Bscore.VD.求最佳迴歸法 , xlab="模型", ylab="訓練與驗證差值", las=1)
 quartz.save("slide/CV求最佳迴歸法.png", dpi=300, type="png")
 # quartz.save("slide/CV求最佳迴歸法.pdf", type="pdf")
 dev.off()
-
-
 
 
 
@@ -591,43 +614,40 @@ for(i in 1:length(TD.row)){
   # 生態訓練資料 dB0t.TD[[i]] 重新降維成 Bscore.TD[[i]] (x)
   # 已降維生態訓練資料 dB0t.TD[[i]] 命為 Bscore.TD[[i]] (o)
   Bscore.TD[[i]] <- data.frame(NO = dt$NO[TD.row[[i]]])
-  Bscore.TD[[i]]$PCA.AIC <- Bscore.TD[[i]]$PCA.BIC <- Bscore.o[TD.row[[i]],]$PCA
-  Bscore.TD[[i]]$FA.AIC  <- Bscore.TD[[i]]$FA.BIC  <- Bscore.o[TD.row[[i]],]$FA
-  Bscore.TD[[i]]$MDS.AIC <- Bscore.TD[[i]]$MDS.BIC <- Bscore.o[TD.row[[i]],]$MDS
-  Bscore.TD[[i]]$RDA.AIC <- Bscore.TD[[i]]$RDA.BIC <- Bscore.o[TD.row[[i]],]$RDA
+  Bscore.TD[[i]]$PCA.AIC <- Bscore.o[TD.row[[i]],]$PCA
+  Bscore.TD[[i]]$PCA.BIC <- Bscore.o[TD.row[[i]],]$PCA
+  Bscore.TD[[i]]$FA.AIC  <- Bscore.o[TD.row[[i]],]$FA
+  Bscore.TD[[i]]$FA.BIC  <- Bscore.o[TD.row[[i]],]$FA
+  Bscore.TD[[i]]$MDS.AIC <- Bscore.o[TD.row[[i]],]$MDS
+  Bscore.TD[[i]]$MDS.BIC <- Bscore.o[TD.row[[i]],]$MDS
+  Bscore.TD[[i]]$RDA.AIC <- Bscore.o[TD.row[[i]],]$RDA
+  Bscore.TD[[i]]$RDA.BIC <- Bscore.o[TD.row[[i]],]$RDA
   rownames(Bscore.TD[[i]]) <- dt$NO[TD.row[[i]]]
   Bscore.TD[[i]]$NO <- NULL
 
   # 生態驗證資料 dB0t.VD[[i]] = Bscore.VD[[i]]          (x)
   # 已降維生態驗證資料 dB0t.VD[[i]] 命為 Bscore.VD[[i]] (o)
   Bscore.VD[[i]] <- data.frame(NO = dt$NO[VD.row[[i]]])
-  Bscore.VD[[i]]$PCA.AIC <- Bscore.VD[[i]]$PCA.BIC <- Bscore.o[VD.row[[i]],]$PCA
-  Bscore.VD[[i]]$FA.AIC  <- Bscore.VD[[i]]$FA.BIC  <- Bscore.o[VD.row[[i]],]$FA
-  Bscore.VD[[i]]$MDS.AIC <- Bscore.VD[[i]]$MDS.BIC <- Bscore.o[VD.row[[i]],]$MDS
-  Bscore.VD[[i]]$RDA.AIC <- Bscore.VD[[i]]$RDA.BIC <- Bscore.o[VD.row[[i]],]$RDA
+  Bscore.VD[[i]]$PCA.AIC <- Bscore.o[VD.row[[i]],]$PCA
+  Bscore.VD[[i]]$PCA.BIC <- Bscore.o[VD.row[[i]],]$PCA
+  Bscore.VD[[i]]$FA.AIC  <- Bscore.o[VD.row[[i]],]$FA
+  Bscore.VD[[i]]$FA.BIC  <- Bscore.o[VD.row[[i]],]$FA
+  Bscore.VD[[i]]$MDS.AIC <- Bscore.o[VD.row[[i]],]$MDS
+  Bscore.VD[[i]]$MDS.BIC <- Bscore.o[VD.row[[i]],]$MDS
+  Bscore.VD[[i]]$RDA.AIC <- Bscore.o[VD.row[[i]],]$RDA
+  Bscore.VD[[i]]$RDA.BIC <- Bscore.o[VD.row[[i]],]$RDA
   rownames(Bscore.VD[[i]]) <- dt$NO[VD.row[[i]]]
   Bscore.VD[[i]]$NO <- NULL
 
   # 拿 Bscore.TD[[i]]$xxA.XIC 於 formu.o$xxA.xIC 做複迴歸
-  # fit.TD[[i]] <- list()
-  # fit.TD[[i]]$PCA.AIC <- lm(paste( "Bscore.TD[[i]]$PCA.AIC ~" , formu.o$PCA.AIC) , data=dG1t.TD[[i]])
-  # fit.TD[[i]]$PCA.BIC <- lm(paste( "Bscore.TD[[i]]$PCA.BIC ~" , formu.o$PCA.BIC) , data=dG1t.TD[[i]])
-  # fit.TD[[i]]$FA.AIC  <- lm(paste( "Bscore.TD[[i]]$FA.AIC ~"  , formu.o$FA.AIC)  , data=dG1t.TD[[i]])
-  # fit.TD[[i]]$FA.BIC  <- lm(paste( "Bscore.TD[[i]]$FA.BIC ~"  , formu.o$FA.BIC)  , data=dG1t.TD[[i]])
-  # fit.TD[[i]]$MDS.AIC <- lm(paste( "Bscore.TD[[i]]$MDS.AIC ~" , formu.o$MDS.AIC) , data=dG1t.TD[[i]])
-  # fit.TD[[i]]$MDS.BIC <- lm(paste( "Bscore.TD[[i]]$MDS.BIC ~" , formu.o$MDS.BIC) , data=dG1t.TD[[i]])
-  # fit.TD[[i]]$RDA.AIC <- lm(paste( "Bscore.TD[[i]]$RDA.AIC ~" , formu.o$RDA.AIC) , data=dG1t.TD[[i]])
-  # fit.TD[[i]]$RDA.BIC <- lm(paste( "Bscore.TD[[i]]$RDA.BIC ~" , formu.o$RDA.BIC) , data=dG1t.TD[[i]])
-  # multiple regression: Bscore.TD[[i]]$xxx ~ ., data=dG1t.TD
+  # 重點：迴歸式的IV組合已預先確定
   fit.TD[[i]] <-  vector(mode = "list", 8)
   names(fit.TD[[i]]) <- paste( c("PCA", "PCA", "FA", "FA", "MDS", "MDS", "RDA", "RDA"), rep(c("AIC", "BIC"), 4), sep="." )
   for(j in 1:length(fit.TD[[i]])) {
-    p <- c(1,1,2,2,3,3,4,4)
-    m1 <- lm(Bscore.TD[[i]] [[ p[j] ]] ~ A+B+C+D+E+F+I+J , data=dG1t.TD[[i]])
-    m0 <- lm(Bscore.TD[[i]] [[ p[j] ]] ~ 1 , data=dG1t.TD[[i]])
-    m2 <- lm(Bscore.TD[[i]] [[ p[j] ]] ~ . , data=dG1t.TD[[i]])
-    this.k <- ifelse(j %% 2 == 1, 2, log(nrow(dG1t.TD[[i]])))
-    fit.TD[[i]][[j]] <- stats::step(m1, scope = list(upper = formula(m2), lower = formula(m0)), k = this.k, direction = stepDirection, trace=1)
+    fit.TD[[i]][[j]] <- lm(
+      as.formula(paste(c( "Bscore.TD[[i]][[j]] ~ ", formu.o[[j]] ), collapse="")),
+      data=dG1t.TD[[i]]
+    )
   }
 
   # 以 fit.TD[[i]]$xxx.yIC 模型，求 dG1t.TD 的預測值 Bscore.TD.pred
@@ -650,9 +670,14 @@ Bscore.VD.最佳解釋變數組 <- do.call("rbind", Bscore.VD)
 dim(Bscore.TD.pred.最佳解釋變數組) ; dim(Bscore.VD.最佳解釋變數組)
 names(Bscore.TD.pred.最佳解釋變數組) ; names(Bscore.VD.最佳解釋變數組)
 # 看看誰最好
-rbind(NRMSE = sqrt(colSums((Bscore.TD.pred.最佳解釋變數組 - Bscore.VD.最佳解釋變數組)^2) / nrow(Bscore.TD.pred.最佳解釋變數組)) / apply(Bscore.VD.最佳解釋變數組, 2, sd))  %>% print %>% xtable(., digits=4)
-quartz(width=7, height=2.5)
-par(mar=c(4,4,0,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=8/12)
+# rbind(NRMSE = sqrt(colSums((Bscore.TD.pred.最佳解釋變數組 - Bscore.VD.最佳解釋變數組)^2) / nrow(Bscore.TD.pred.最佳解釋變數組)) / apply(Bscore.VD.最佳解釋變數組, 2, sd))  %>% print %>% xtable(., digits=4) %>% print.xtable(., booktabs=T)
+rbind(
+  NRMSE = rmse(Bscore.TD.pred.最佳解釋變數組, Bscore.VD.最佳解釋變數組) / apply(Bscore.VD.最佳解釋變數組, 2, sd),
+  `Pearson r` = cor(Bscore.TD.pred.最佳解釋變數組, Bscore.VD.最佳解釋變數組) %>% diag,
+  `Kendall tau` = cor(Bscore.TD.pred.最佳解釋變數組, Bscore.VD.最佳解釋變數組, method="kendall") %>% diag
+  )  %>% print %>% xtable(., digits=4) %>% print(., booktabs=T)
+quartz(width=7, height=1.5)
+par(mar=c(2,4,0,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=8/12)
 boxplot(  Bscore.TD.pred.最佳解釋變數組 - Bscore.VD.最佳解釋變數組 , xlab="模型", ylab="訓練與驗證差值", lax=1)
 quartz.save("slide/CV-最佳解釋變數組.png", dpi=300, type="png")
 # quartz.save("slide/CV-最佳解釋變數組.pdf", type="pdf")
@@ -670,6 +695,7 @@ dev.off()
 
 #### 10-fold CV 找8種求解法何者較佳
 #### 目標：求最佳整套求解方式（包括降維與迴歸方式）
+mds.try.n <- 30
 Bscore.TD <- list()
 Bscore.VD <- list()
 fit.TD <- list()
@@ -677,19 +703,27 @@ Bscore.TD.pred <- list()
 for(i in 1:length(TD.row)){
   # 生態訓練資料 dB0t.TD[[i]] 重新降維成 Bscore.TD[[i]]
   Bscore.TD[[i]] <- data.frame(NO = dt$NO[TD.row[[i]]])
-  Bscore.TD[[i]]$PCA <- fitPCA(dB0t.TD[[i]])
-  Bscore.TD[[i]]$FA  <- fitFA(dB0t.TD[[i]])
-  Bscore.TD[[i]]$MDS <- fitMDS(dB0t.TD[[i]])
-  Bscore.TD[[i]]$RDA <- fitRDA(dB0t.TD[[i]], dG1t.TD[[i]])
+  Bscore.TD[[i]]$PCA.AIC <- fitPCA(dB0t.TD[[i]])
+  Bscore.TD[[i]]$PCA.BIC <- Bscore.TD[[i]]$PCA.AIC
+  Bscore.TD[[i]]$FA.AIC  <- fitFA(dB0t.TD[[i]])
+  Bscore.TD[[i]]$FA.BIC  <- Bscore.TD[[i]]$FA.AIC
+  Bscore.TD[[i]]$MDS.AIC <- fitMDS(dB0t.TD[[i]])
+  Bscore.TD[[i]]$MDS.BIC <- Bscore.TD[[i]]$MDS.AIC
+  Bscore.TD[[i]]$RDA.AIC <- fitRDA(dB0t.TD[[i]], dG1t.TD[[i]])
+  Bscore.TD[[i]]$RDA.BIC <- Bscore.TD[[i]]$RDA.AIC
   rownames(Bscore.TD[[i]]) <- dt$NO[TD.row[[i]]]
   Bscore.TD[[i]]$NO <- NULL
 
   # 生態驗證資料 dB0t.VD[[i]] = Bscore.VD[[i]]
   Bscore.VD[[i]] <- data.frame(NO = dt$NO[VD.row[[i]]])
-  Bscore.VD[[i]]$PCA.AIC <- Bscore.VD[[i]]$PCA.BIC <- fitPCA(dB0t.VD[[i]])
-  Bscore.VD[[i]]$FA.AIC  <- Bscore.VD[[i]]$FA.BIC  <- fitFA(dB0t.VD[[i]])
-  Bscore.VD[[i]]$MDS.AIC <- Bscore.VD[[i]]$MDS.BIC <- fitMDS(dB0t.VD[[i]])
-  Bscore.VD[[i]]$RDA.AIC <- Bscore.VD[[i]]$RDA.BIC <- fitRDA(dB0t.VD[[i]], dG1t.VD[[i]])
+  Bscore.VD[[i]]$PCA.AIC <- fitPCA(dB0t.VD[[i]])
+  Bscore.VD[[i]]$PCA.BIC <- Bscore.VD[[i]]$PCA.AIC
+  Bscore.VD[[i]]$FA.AIC  <- fitFA(dB0t.VD[[i]])
+  Bscore.VD[[i]]$FA.BIC  <- Bscore.VD[[i]]$FA.AIC
+  Bscore.VD[[i]]$MDS.AIC <- fitMDS(dB0t.VD[[i]])
+  Bscore.VD[[i]]$MDS.BIC <- Bscore.VD[[i]]$MDS.AIC
+  Bscore.VD[[i]]$RDA.AIC <- fitRDA(dB0t.VD[[i]], dG1t.VD[[i]])
+  Bscore.VD[[i]]$RDA.BIC <- Bscore.VD[[i]]$RDA.AIC
   rownames(Bscore.VD[[i]]) <- dt$NO[VD.row[[i]]]
   Bscore.VD[[i]]$NO <- NULL
 
@@ -697,10 +731,9 @@ for(i in 1:length(TD.row)){
   fit.TD[[i]] <-  vector(mode = "list", 8)
   names(fit.TD[[i]]) <- paste( c("PCA", "PCA", "FA", "FA", "MDS", "MDS", "RDA", "RDA"), rep(c("AIC", "BIC"), 4), sep="." )
   for(j in 1:length(fit.TD[[i]])) {
-    p <- c(1,1,2,2,3,3,4,4)
-    m1 <- lm(Bscore.TD[[i]] [[ p[j] ]] ~ A+B+C+D+E+F+I+J , data=dG1t.TD[[i]])
-    m0 <- lm(Bscore.TD[[i]] [[ p[j] ]] ~ 1 , data=dG1t.TD[[i]])
-    m2 <- lm(Bscore.TD[[i]] [[ p[j] ]] ~ . , data=dG1t.TD[[i]])
+    m1 <- lm(Bscore.TD[[i]] [[j]] ~ A+B+C+D+E+F+I+J , data=dG1t.TD[[i]])
+    m0 <- lm(Bscore.TD[[i]] [[j]] ~ 1 , data=dG1t.TD[[i]])
+    m2 <- lm(Bscore.TD[[i]] [[j]] ~ . , data=dG1t.TD[[i]])
     this.k <- ifelse(j %% 2 == 1, 2, log(nrow(dG1t.TD[[i]])))
     fit.TD[[i]][[j]] <- stats::step(m1, scope = list(upper = formula(m2), lower = formula(m0)), k = this.k, direction = stepDirection, trace=1)
   }
@@ -726,9 +759,13 @@ Bscore.VD.final <- do.call("rbind", Bscore.VD)
 dim(Bscore.TD.pred.final) ; dim(Bscore.VD.final)
 names(Bscore.TD.pred.final) ; names(Bscore.VD.final)
 # 看看誰最好
-rbind(NRMSE = sqrt(colSums((Bscore.TD.pred.final - Bscore.VD.final)^2) / nrow(Bscore.TD.pred.final)) / apply(Bscore.VD.final, 2, sd))  %>% print %>% xtable(., digits=4)
-quartz(width=7, height=2.5)
-par(mar=c(4,4,0,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=8/12)
+rbind(
+  NRMSE = rmse(Bscore.TD.pred.final, Bscore.VD.final) / apply(Bscore.VD.final, 2, sd),
+  `Pearson r` = cor(Bscore.TD.pred.final, Bscore.VD.final) %>% diag,
+  `Kendall tau` = cor(Bscore.TD.pred.final, Bscore.VD.final, method="kendall") %>% diag
+  )  %>% print %>% xtable(., digits=4) %>% print(., booktabs=T)
+quartz(width=7, height=1.5)
+par(mar=c(2,4,0,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=8/12)
 boxplot(  Bscore.TD.pred.final - Bscore.VD.final , xlab="模型", ylab="訓練與驗證差值", lax=1)
 quartz.save("slide/CV-final.png", dpi=300, type="png")
 # quartz.save("slide/CV-final.pdf", type="pdf")
@@ -746,8 +783,8 @@ dev.off()
 
 
 
-
-#### 10-fold CV 找哪種降維方法最好 ---- 不可能，因為無法訓練出 FA MDS 的模型來預測分數
+#### 10-fold CV 找哪種降維方法最好 ----
+#### 不可能，因為無法訓練出 FA MDS 的模型來預測分數
 #### 改做 bootstrap kendall correlation 找哪種降維方法最好
 k <- 10000
 ind <- vector("list", k)
@@ -784,26 +821,77 @@ save(bootR.final, file="boorT.final.Rdata")
 
 
 ########## 印出迴歸式
-coefM.o[c("PCA.AIC","RDA.AIC")] %>% xtable(., digits=4) %>% print(., NA.string="---")
+coefM.o[c("PCA.AIC","RDA.AIC")] %>% xtable(., digits=4) %>% print(., NA.string="---", booktabs=T)
 
+
+######## 回推未中心化的迴歸式
+round(coefM.o[c("PCA.AIC","RDA.AIC")], digits=10)
+finalFormula <- vector("list", 2)
+names(finalFormula) <- c("PCA.AIC","RDA.AIC")
+
+# dG1t1Mean
+i = 1
+finalFormula[[i]] <- list()
+finalFormula[[i]]$intercept <-
+  coefM.o["(Intercept)", i] +
+  -coefM.o["A", i] * dG1t1Mean["A"] +
+  -coefM.o["B", i] * dG1t1Mean["B"] +
+  -coefM.o["E", i] * dG1t1Mean["E"] +
+  -coefM.o["J", i] * dG1t1Mean["J"] +
+  coefM.o["A2", i] * dG1t1Mean["A"]^2 +
+  coefM.o["AD", i] * dG1t1Mean["A"] * dG1t1Mean["D"] +
+  coefM.o["AI", i] * dG1t1Mean["A"] * dG1t1Mean["I"] +
+  coefM.o["BE", i] * dG1t1Mean["B"] * dG1t1Mean["E"] +
+  coefM.o["BI", i] * dG1t1Mean["B"] * dG1t1Mean["I"] +
+  coefM.o["DI", i] * dG1t1Mean["D"] * dG1t1Mean["I"]
+finalFormula[[i]]$A <-
+  coefM.o["A", i] +
+  -2 * coefM.o["A2", i] * dG1t1Mean["A"] +
+  -coefM.o["AD", i] * dG1t1Mean["D"] +
+  -coefM.o["AI", i] * dG1t1Mean["I"]
+finalFormula[[i]]$A2 <-
+  coefM.o["A2", i]
+finalFormula[[i]]$B <-
+  coefM.o["B", i] +
+  -coefM.o["BE", i] * dG1t1Mean["E"] +
+  -coefM.o["BI", i] * dG1t1Mean["I"]
+finalFormula[[i]]$D <-
+  -coefM.o["AD", i] * dG1t1Mean["A"] +
+  -coefM.o["DI", i] * dG1t1Mean["I"]
+finalFormula[[i]]$E <-
+  coefM.o["E", i] +
+  -coefM.o["BE", i] * dG1t1Mean["B"]
+finalFormula[[i]]$I <-
+  -coefM.o["AI", i] * dG1t1Mean["A"] +
+  -coefM.o["BI", i] * dG1t1Mean["B"] +
+  -coefM.o["DI", i] * dG1t1Mean["D"]
+finalFormula[[i]]$J <-
+  coefM.o["J", i] +
+  -coefM.o["AI", i] * dG1t1Mean["A"]
+finalFormula.PCA.AIC <- do.call("c", finalFormula[[1]])
+t(finalFormula.PCA.AIC) %>% xtable
+
+  coefM.o["A2", 1] * dG1t1Mean["A"] +
 
 
 
 
 
 ############# 做出所有可能假資料
-areaL <- 11 # 分 areaL 級面積等級
+areaL <- 5 # 分 areaL 級面積等級
 typeN <- 6  # 有 typeN 種面積
-sizeM <- areaL ^ (typeN - 1)
+sizeM <- areaL ^ (typeN)
 tmp0 <- vector("list", typeN)
 names(tmp0) <- c("A","B","D","E","I","J")
 for(i in 1:typeN){
   tmp0[[i]] <- as.numeric(gl(areaL, areaL^(i-1), sizeM)) - 1
 }
-dGsimAll1 <- do.call("cbind", tmp0) %>% data.frame(., check.names = F, stringsAsFactors = F)
-dGsimAll1$J <- sum(1:typeN) - rowSums(dGsimAll1)
-dGsimAll1 %<>% subset(., J >= 0) %>% unique %>% apply(., 2, function(x){x-mean(x)}) %>% as.data.frame
-head(dGsimAll1)
+dGsimAll1 <- do.call("cbind", tmp0) %>%
+  data.frame(., check.names = F, stringsAsFactors = F) %>%
+  decostand(., "total", 1) %>%
+  unique %>%
+  apply(., 2, function(x){x-mean(x)}) %>%
+  as.data.frame
 # dGsimAll1 完成：已建好一次式
 dGsimAll2 <- as.data.frame(dGsimAll1^2); names(dGsimAll2) <- paste0(names(dGsimAll2), "2")
 # dGsimAll2 完成：已建好二次式和交互作用
@@ -820,18 +908,23 @@ pred.dGsimAll.pca.aic <- predict(fit.o$PCA.AIC, dGsimAll)
 pred.dGsimAll.rda.aic <- predict(fit.o$RDA.AIC, dGsimAll)
 
 ## heatmap PCA.AIC
-x <- data.frame(PCA.AIC = pred.dGsimAll.pca.aic, RDA.AIC = pred.dGsimAll.rda.aic, dGsimAll) %>%
+x <- data.frame(
+  PCA.AIC = pred.dGsimAll.pca.aic,
+  RDA.AIC = pred.dGsimAll.rda.aic,
+  dGsimAll) %>%
   as.matrix %>%
   .[order(pred.dGsimAll.pca.aic),]
 quartz(width=7, height=7)
 par(family = "Noto Sans CJK TC", cex=8/12)
 hv <- heatmap(
-  x,
+  #x,  # 很難用
+  x %>% apply(., 2, function(x){rank(x)}), #把 x rank 化比較好畫
   Rowv = NA, Colv = NA,
-  col = rainbow(256),
+  # col = cm.colors(50),
+  col = rainbow(250, start=0, end=150/256),
   # col = gray(seq(1, 0, length=10)),
-  scale = "column",
-  # scale = "none",
+  # scale = "column",
+  scale = "none",
   na.rm = F,
   margins = c(5,22), cexRow=1, cexCol=1,
   labRow = "",
@@ -858,19 +951,19 @@ dev.off()
 dt %>% .[order(-dB0t.pred$PCA.AIC.p) , ] %>%
   head(., 20) %>% .[, c(2:17, 22:25)] %>%
   xtable(., digits=c(rep(0,17), rep(3,4))) %>%
-  print(., NA.string="---")
+  print(., NA.string="---", booktab=T)
 dt %>% .[order( dB0t.pred$PCA.AIC.p) , ] %>%
   head(., 20) %>% .[, c(2:17, 22:25)] %>%
   xtable(., digits=c(rep(0,17), rep(3,4))) %>%
-  print(., NA.string="---")
+  print(., NA.string="---", booktab=T)
 dt %>% .[order(-dB0t.pred$RDA.AIC.p) , ] %>%
   head(., 20) %>% .[, c(2:17, 22:25)] %>%
   xtable(., digits=c(rep(0,17), rep(3,4))) %>%
-  print(., NA.string="---")
+  print(., NA.string="---", booktab=T)
 dt %>% .[order( dB0t.pred$RDA.AIC.p) , ] %>%
   head(., 20) %>% .[, c(2:17, 22:25)] %>%
   xtable(., digits=c(rep(0,17), rep(3,4))) %>%
-  print(., NA.string="---")
+  print(., NA.string="---", booktab=T)
 
 
 
