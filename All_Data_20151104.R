@@ -10,7 +10,7 @@ require(ggplot2)
 require(hydroGOF)
 require(car)
 library(MuMIn)
-mds.try.n <- 30
+mds.try.n <- 10
 NRMSE <- function(sim, obs){
   hydroGOF::rmse(sim, obs) / sd(obs)
 }
@@ -47,8 +47,12 @@ panel.smooth <- function (x, y, col = par("col"), bg = NA, pch = par("pch"),
       col = col.smooth, ...)
 }
 
-quartzFonts(sans = quartzFont(rep("Noto Sans CJK TC Regular", 4)),
-            serif = quartzFont(rep("Noto Sans CJK TC Regular", 4)))
+quartzFonts(
+  sans = quartzFont(rep("Noto Sans CJK TC Regular", 4)),
+  serif = quartzFont(rep("Noto Sans CJK TC Regular", 4))
+  )
+quartzFont <- "Noto Sans CJK TC"
+
 BAF.mat <- matrix(
   c(1.4, 4.4, 3.9, 4.9, 4.3, 4.5, 3.7, 6.1, 7, 6.4, 4.3, 3.4, 5.4), 1,
   dimnames = list(c("BAF"), letters[1:13]) )
@@ -69,8 +73,11 @@ dB0 <- d[, grep("^(Dgs|Hs)[a-zA-Z]+$", names(d))]
 
 ## 找出總面積不正常的點
 quartz(width=7, height=3)
-par(cex=10/12, mar=c(4,4,0,0)+0.1, family = "Noto Sans CJK TC")
-hist(rowSums(dG0), nclass=40, main="", xlim=c(0,60000), ylim=c(0,500), col=3, xlab="總面積（m²）", ylab="次數")
+par(cex=10/12, mar=c(4,4,0,0)+0.1, family = quartzFont)
+hist(rowSums(dG0), nclass=40, main="",
+  xlim=c(0,60000), ylim=c(0,500), col=3,
+  xlab="總面積（m²）", ylab="次數"
+  )
   abline(v=c(8000,12000), lty=2, col=2)
   text(4000, 260, "< 8000\n(219/1169)")
   text(16000, 260, "> 12000\n(26/1169)")
@@ -81,8 +88,10 @@ dev.off()
 
 ## 找出未定義面積不正常的點
 quartz(width=7, height=3)
-par(cex=10/12, mar=c(4,4,0,0)+0.1, family = "Noto Sans CJK TC")
-hist(dG0$X, nclass=40, main="", xlim=c(0,20000), ylim=c(0,600), col=3, xlab="未定義面積（m²）", ylab="次數")
+par(cex=10/12, mar=c(4,4,0,0)+0.1, family = quartzFont)
+hist(dG0$X, nclass=40, main="", xlim=c(0,20000), ylim=c(0,600),
+  col=3, xlab="未定義面積（m²）", ylab="次數"
+  )
   abline(v=c(8000), lty=2, col=2)
   text(12000, 550, "> 8000\n(125/1169)")
 # quartz.save("./slide/invalid-gx-area.pdf", type="pdf")
@@ -94,7 +103,7 @@ dev.off()
 Location <- as.character(d$Location)
   Location[duplicated(Location)] <- ""
 quartz(width=7, height=7)
-par(family = "Noto Sans CJK TC", cex=10/12)
+par(family = quartzFont, cex=10/12)
 hv <- heatmap(
   log10(dG0 + 1) %>% as.matrix,
   Rowv = NA, Colv = NA,
@@ -113,7 +122,7 @@ dev.off()
 Location <- as.character(d$Location)
   Location[duplicated(Location)] <- ""
 quartz(width=7, height=7)
-par(family = "Noto Sans CJK TC", cex=10/12)
+par(family = quartzFont, cex=10/12)
 hv <- heatmap(
   log10(dB0 + 1) %>% as.matrix ,
   Rowv = NA, Colv = NA,
@@ -122,7 +131,8 @@ hv <- heatmap(
   scale = "none", na.rm = F,
   margins = c(6,6),cexRow=0.3,cexCol=1,
   labRow = Location,
-  labCol = paste(c("木本","草本","蜘蛛","昆蟲"), c(rep("Simpson",4), rep("Shannon",4)), sep="\n"),
+  labCol = paste(c("木本","草本","蜘蛛","昆蟲"), c(rep("Simpson",4),
+    rep("Shannon",4)), sep="\n"),
   xlab = "", ylab =  "")
 # quartz.save("./slide/invalid-bio.pdf", type="pdf")
 quartz.save("./slide/invalid-bio.png", dpi=300, type="png")
@@ -139,7 +149,8 @@ dev.off()
 
 
 
-
+#### 是不是要試著切大樣區分開做？
+#### 是不是真的要把溼地全拿掉？
 
 
 # 求解用的 dataset
@@ -152,6 +163,7 @@ dev.off()
 # 面積以列標準化為 sum = 1
 # NO=="640" 很怪
 # isAreaNormalization <- F
+# 溼地都不要用 NO 159 -- 633
 isAreaMeanCentering <- T
 isTotalSameArea <- T # 總和調成 1
 isUnknownAreaIgnored <- T # 不理 X 其它總和調成 1
@@ -159,7 +171,10 @@ dt <- d %>%
   na.omit %>%
   subset(., X+A+B+C+D+E+F+G+H+I+J+K+L+M >= 5000) %>%
   subset(., X+A+B+C+D+E+F+G+H+I+J+K+L+M <= 15000) %>%
-  subset(., X <= 8000)
+  subset(., X <= 8000) %>%
+  subset(., Location != "大肚濕地" & Location != "大安濕地" & Location != "大城濕地" & Location != "高美濕地")
+  # subset(., HsWood+HsGrass+HsSpider+HsInsect > 0)
+dt$Location %<>% droplevels
 dim(dt); str(dt)
 # 環境資料
 # 一次項
@@ -183,23 +198,30 @@ dG1tI <- model.matrix(~(.)^2, dG1t1) %>%
   as.data.frame %>%
   .[, grep(":", colnames(.))] %>%
   as.data.frame
-names(dG1tI) %<>% gsub(":", "", .) ; dim(dG1tI); head(dG1tI)
+names(dG1tI) %<>% gsub(":", "", .)
+dim(dG1tI); head(dG1tI)
 # 結合三者 # 減去沒用的交互作用
+# dG1t <- cbind(dG1t1, dG1t2, dG1tI) %>%
+#   as.data.frame %>%
+#   .[, colSums(.) != 0] %>%
+#   .[!colnames(.) %in% c("C2","F2","AC","AF","BC","BF","CD","CE","CF","CI","CJ","DF","EF","EI","EJ","FI","FJ")]
 dG1t <- cbind(dG1t1, dG1t2, dG1tI) %>%
   as.data.frame %>%
-  .[, colSums(.) != 0] %>% .[!colnames(.) %in% c("C2","F2","AC","AF","BC","BF","CD","CE","CF","CI","CJ","DF","EF","EI","EJ","FI","FJ")]
+  .[, colSums(.) != 0] %>%
+  .[!colnames(.) %in%   c("B2","C2","D2","F2","AC","AF","BC","BD","BF","BJ", "CD", "CE","CF","CI","CJ","DF","EF","EI","EJ","FI","FJ")]
 str(dG1t)
-cor(dG1t)
 
 # 生態資料
 dB0t <- dt %>%
-  .[, grep("^(Hs)[a-zA-Z]+$", names(.))] %>%
-  decostand(., "range", 2)
+  .[, grep("^(Hs)[a-zA-Z]+$", names(.))]  %>%
+  # .[, names(.) %in% c("DgsSpider", "DgsInsect", "HsSpider", "HsInsect")] %>%
+  decostand(., "range", 2) %>%
+  as.data.frame
 str(dB0t)
 
 # 所有採用資料圖
 quartz(width=7, height=3.5)
-par(cex=8/12, mar=c(5,5,0,0)+0.1, family = "Noto Sans CJK TC", mgp=c(4,1,0))
+par(cex=8/12, mar=c(5,5,0,0)+0.1, family = quartzFont, mgp=c(4,1,0))
 boxplot(cbind(dB0t, dG1t), xlab="變數", ylab="標準化後數值", las=2)
   # axis(1, bp, names(dG1t))
 # quartz.save("./slide/var-summary.pdf", type="pdf")
@@ -218,7 +240,8 @@ fitPCA <- function(dt){
   fit <- princomp(dt, cor=F)
   score <- fit$scores[,1]
   loading <- t(loadings(fit)[,1])
-  if(mean(loading < 0)) {score <- -score; loading <- -loading}
+  # if(mean(loading < 0)) {score <- -score; loading <- -loading}
+  if(  abs(sort(loading))[1] > abs(sort(loading))[length(loading)]  ) {score <- -score; loading <- -loading}
   print(summary(fit))
   print(round(loading, digits=6))
   return((score - mean(score))/sd(score))
@@ -227,7 +250,8 @@ fitFA <- function(dt){
   fit <- factanal(dt, 1, rotation="varimax", scores="regression", trace=T)
   score <- as.vector(fit$scores)
   loading <- t(loadings(fit))
-  if(mean(loading < 0)) {score <- -score; loading <- -loading}
+  # if(mean(loading < 0)) {score <- -score; loading <- -loading}
+  if(  abs(sort(loading))[1] > abs(sort(loading))[length(loading)]  ) {score <- -score; loading <- -loading}
   fit
   print(t(loadings(fit)), digits=6)
   return((score - mean(score))/sd(score))
@@ -239,7 +263,8 @@ fitMDS <- function(dt){
   fit <- vegan::metaMDS(dt, distance="euclidean", k = 2, trymax = mds.try.n)
   score <- scores(fit)[,1]
   loading <- t(fit$species[,1])
-  if(mean(loading < 0)) {score <- -score; loading <- -loading}
+  # if(mean(loading < 0)) {score <- -score; loading <- -loading}
+  if(  abs(sort(loading))[1] > abs(sort(loading))[length(loading)]  ) {score <- -score; loading <- -loading}
   print(round(fit$stress, digits=6))
   print(round(loading, digits=6))
   return((score - mean(score))/sd(score))
@@ -252,7 +277,8 @@ fitRDA <- function(dtB, dtG){
   fit <- vegan::rda(dtB ~ ., data=dtG, scale=F)
   score <- summary(fit)$sites[,1]
   loading <- t(summary(fit)$species[,1])
-  if(mean(loading < 0)) {score <- -score; loading <- -loading}
+  # if(mean(loading < 0)) {score <- -score; loading <- -loading}
+  if(  abs(sort(loading))[1] > abs(sort(loading))[length(loading)]  ) {score <- -score; loading <- -loading}
   print(head(summary(fit)))
   print(round(loading, digits=6))
   return((score - mean(score))/sd(score))
@@ -302,7 +328,7 @@ for(i in 1:length(fit.o)) {
   print %>% xtable(., digits=3) %>%  print(., NA.string="---", booktabs=T)
 # show vif figures
 # quartz(width=10, height=5)
-# par(mar=c(4,4,1,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=10/12, mfrow=c(2,4), las=2)
+# par(mar=c(4,4,1,0)+0.1, family = quartzFont, mgp=c(3,1,0), cex=10/12, mfrow=c(2,4), las=2)
 # for(i in 1:length(fit.o)){
 #   bp <- barplot(coefVifM.o[,i], beside=T, legend.text=T, ylim=c(0,10), col=8, ylab="VIF")
 #   axis(1, bp, rownames(coefVifM.o))
@@ -321,44 +347,44 @@ for(i in 1:length(fit.o)) {
 
 
 # ## beta : relative importance
-# ri <- list()
-# for(i in 1:length(fit.o)) {
-#   ri[[i]] <- calc.relimp(fit.o[[i]], type=c("lmg"), rela=F)
-# }
-# quartz(width=10, height=5)
-# par(mar=c(4,4,1,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=4/12, mfrow=c(2,4))
-# for(i in 1:length(ri)) {
-#   barplot( ri[[i]]@lmg, xlab="", ylab="R² 貢獻量", beside=T, ylim=c(0,0.4), las=2)
-#   title(names(fit.o)[i])
-# }
-# # quartz.save( "slide/beta相對貢獻量.pdf", type="pdf")
-# quartz.save( "slide/beta相對貢獻量.png", type="png", dpi=300)
-# dev.off()
-
-## beta : relative importance (with bootstrap 95% CI)
-riBoot <- vector("list", length(fit.o))
-names(riBoot) <- names(fit.o)
-for(i in 1:length(riBoot)) {
-  set.seed(52004800)
-  riBoot[[i]] <- boot.relimp(fit.o[[i]], b = 1000, type = c("lmg"), rela = F, rank=F, diff=F)
+ri <- vector("list", length(fit.o))
+for(i in 1:length(fit.o)) {
+  ri[[i]] <- calc.relimp(fit.o[[i]], type=c("lmg"), rela=F)
 }
 quartz(width=10, height=5)
-par(mar=c(4,4,1,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=10/12, mfrow=c(2,4))
-for(i in 1:length(riBoot)) {
-  relimpBootResult <- rbind(
-    booteval.relimp(riBoot[[i]])@lmg.upper,
-    booteval.relimp(riBoot[[i]])@lmg.lower,
-    booteval.relimp(riBoot[[i]])@est[-1:-3]
-  )
-  colnames(relimpBootResult) <- gsub(".lmg", "", colnames(relimpBootResult))
-  rownames(relimpBootResult) <- c("Upper", "Lower", "M")
-  bp <- barplot(relimpBootResult['M',], xlab="", ylab="R² 貢獻量", beside=T, ylim=c(0,0.4), las=2)
-  segments(bp, relimpBootResult["Upper",], bp, relimpBootResult["Lower",], lwd=2)
-  # title(names(fit.o)[i])
+par(mar=c(4,4,1,0)+0.1, family = quartzFont, mgp=c(3,1,0), cex=8/12, mfrow=c(2,4))
+for(i in 1:length(ri)) {
+  barplot( ri[[i]]@lmg, xlab="", ylab="R² 貢獻量", beside=T, ylim=c(0,0.25), las=2)
+  title(names(fit.o)[i])
 }
-# quartz.save( "slide/beta相對貢獻量boot.pdf", type="pdf")
-quartz.save( "slide/beta相對貢獻量boot.png", type="png", dpi=300)
+# quartz.save( "slide/beta相對貢獻量.pdf", type="pdf")
+quartz.save( "slide/beta相對貢獻量.png", type="png", dpi=300)
 dev.off()
+
+## beta : relative importance (with bootstrap 95% CI)
+# riBoot <- vector("list", length(fit.o))
+# names(riBoot) <- names(fit.o)
+# for(i in 1:length(riBoot)) {
+#   set.seed(52004800)
+#   riBoot[[i]] <- boot.relimp(fit.o[[i]], b = 1000, type = c("lmg"), rela = F, rank=F, diff=F)
+# }
+# quartz(width=10, height=5)
+# par(mar=c(4,4,1,0)+0.1, family = quartzFont, mgp=c(3,1,0), cex=10/12, mfrow=c(2,4))
+# for(i in 1:length(riBoot)) {
+#   relimpBootResult <- rbind(
+#     booteval.relimp(riBoot[[i]])@lmg.upper,
+#     booteval.relimp(riBoot[[i]])@lmg.lower,
+#     booteval.relimp(riBoot[[i]])@est[-1:-3]
+#   )
+#   colnames(relimpBootResult) <- gsub(".lmg", "", colnames(relimpBootResult))
+#   rownames(relimpBootResult) <- c("Upper", "Lower", "M")
+#   bp <- barplot(relimpBootResult['M',], xlab="", ylab="R² 貢獻量", beside=T, ylim=c(0,0.4), las=2)
+#   segments(bp, relimpBootResult["Upper",], bp, relimpBootResult["Lower",], lwd=2)
+#   # title(names(fit.o)[i])
+# }
+# # quartz.save( "slide/beta相對貢獻量boot.pdf", type="pdf")
+# quartz.save( "slide/beta相對貢獻量boot.png", type="png", dpi=300)
+# dev.off()
 
 
 
@@ -399,7 +425,7 @@ rbind(
   `BIC/1000` = sapply(fit.o, BIC) / 1000
 ) %>% print %>% xtable(., digits=3) %>% print.xtable(booktabs=T)
 quartz(width=7, height=2)
-par(mar=c(4,4,0,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=10/12)
+par(mar=c(4,4,0,0)+0.1, family = quartzFont, mgp=c(3,1,0), cex=10/12)
 boxplot(sapply(fit.o, resid) %>% scale(., center=F), xlab="模型", ylab="標準化殘差", las=1)
 quartz.save("slide/resid最佳迴歸法.png", dpi=300, type="png")
 # quartz.save("./slide/resid最佳迴歸法.pdf", type="pdf")
@@ -419,7 +445,7 @@ dev.off()
 # )
 # for(i in 1:nrow(tmp)) {
 #   quartz(width=7, height=3.5)
-#   par(mar=c(5,5,0,0)+0.1, family = "Noto Sans CJK TC", mgp=c(4,1,0), cex=8/12)
+#   par(mar=c(5,5,0,0)+0.1, family = quartzFont, mgp=c(4,1,0), cex=8/12)
 #   plot(NULL, xlim=c(1, nrow(coefM.o)), ylim=c(-15,15), xaxt="n", yaxt="n", xlab="類型", ylab="原始迴歸係數" )
 #     axis(1, 1:nrow(coefM.o), rownames(coefM.o), las=2)
 #     axis(2, seq(-16, 16, 2), seq(-16, 16, 2), las=2)
@@ -569,7 +595,7 @@ rbind(
   `Kendall tau` = cor(Bscore.TD.pred.求最佳迴歸法, Bscore.VD.求最佳迴歸法, method="kendall") %>% diag
   )  %>% print %>% xtable(., digits=4) %>% print(., booktabs=T)
 quartz(width=7, height=1.5)
-par(mar=c(2,4,0,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=8/12)
+par(mar=c(2,4,0,0)+0.1, family = quartzFont, mgp=c(3,1,0), cex=8/12)
 boxplot(  Bscore.TD.pred.求最佳迴歸法 - Bscore.VD.求最佳迴歸法 , xlab="模型", ylab="訓練與驗證差值", las=1)
 quartz.save("slide/CV求最佳迴歸法.png", dpi=300, type="png")
 # quartz.save("slide/CV求最佳迴歸法.pdf", type="pdf")
@@ -677,7 +703,7 @@ rbind(
   `Kendall tau` = cor(Bscore.TD.pred.最佳解釋變數組, Bscore.VD.最佳解釋變數組, method="kendall") %>% diag
   )  %>% print %>% xtable(., digits=4) %>% print(., booktabs=T)
 quartz(width=7, height=1.5)
-par(mar=c(2,4,0,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=8/12)
+par(mar=c(2,4,0,0)+0.1, family = quartzFont, mgp=c(3,1,0), cex=8/12)
 boxplot(  Bscore.TD.pred.最佳解釋變數組 - Bscore.VD.最佳解釋變數組 , xlab="模型", ylab="訓練與驗證差值", lax=1)
 quartz.save("slide/CV-最佳解釋變數組.png", dpi=300, type="png")
 # quartz.save("slide/CV-最佳解釋變數組.pdf", type="pdf")
@@ -765,7 +791,7 @@ rbind(
   `Kendall tau` = cor(Bscore.TD.pred.final, Bscore.VD.final, method="kendall") %>% diag
   )  %>% print %>% xtable(., digits=4) %>% print(., booktabs=T)
 quartz(width=7, height=1.5)
-par(mar=c(2,4,0,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=8/12)
+par(mar=c(2,4,0,0)+0.1, family = quartzFont, mgp=c(3,1,0), cex=8/12)
 boxplot(  Bscore.TD.pred.final - Bscore.VD.final , xlab="模型", ylab="訓練與驗證差值", lax=1)
 quartz.save("slide/CV-final.png", dpi=300, type="png")
 # quartz.save("slide/CV-final.pdf", type="pdf")
@@ -878,11 +904,11 @@ t(finalFormula.PCA.AIC) %>% xtable
 
 
 ############# 做出所有可能假資料
-areaL <- 5 # 分 areaL 級面積等級
-typeN <- 6  # 有 typeN 種面積
+areaL <- 3 # 分 areaL 級面積等級
+typeN <- 8  # 有 typeN 種面積
 sizeM <- areaL ^ (typeN)
 tmp0 <- vector("list", typeN)
-names(tmp0) <- c("A","B","D","E","I","J")
+names(tmp0) <- c("A","B","C","D","E","F","I","J")
 for(i in 1:typeN){
   tmp0[[i]] <- as.numeric(gl(areaL, areaL^(i-1), sizeM)) - 1
 }
@@ -915,7 +941,7 @@ x <- data.frame(
   as.matrix %>%
   .[order(pred.dGsimAll.pca.aic),]
 quartz(width=7, height=7)
-par(family = "Noto Sans CJK TC", cex=8/12)
+par(family = quartzFont, cex=8/12)
 hv <- heatmap(
   #x,  # 很難用
   x %>% apply(., 2, function(x){rank(x)}), #把 x rank 化比較好畫
