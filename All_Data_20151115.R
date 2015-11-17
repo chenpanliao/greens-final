@@ -36,7 +36,7 @@ panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...){
   txt <- format(c(r, 0.123456789), digits = digits)[1]
   txt <- paste0(prefix, txt)
   if(missing(cex.cor)) cex.cor <- 1.5/strwidth(txt)
-  text(0.5, 0.5, txt, cex = ra*1.2+0.5)
+  text(0.5, 0.5, txt, cex = ra*1.4+1)
 }
 panel.smooth <- function (x, y, col = par("col"), bg = NA, pch = par("pch"),
   cex = 1, col.smooth = "red", span = 4/5, iter = 100, ...)
@@ -298,6 +298,71 @@ dev.off()
 
 
 
+#### 改做 bootstrap kendall correlation 找哪種降維方法最好
+k <- 5000
+ind <- vector("list", k)
+set.seed(52004800)#; set.seed(19821006); set.seed(124234545)
+ind <- lapply(ind, function(x){return(sample(1:nrow(dB0t), replace=T))})
+bootR <- vector("list", k)
+pb <- txtProgressBar(min = 0, max = k, style = 3)
+for(i in 1:k){
+  bootR[[i]] <- data.frame(
+    cor(Bscore.o[ind[[i]],-1]$PCA, dB0t[ind[[i]],], method="kendall" ),
+    cor(Bscore.o[ind[[i]],-1]$FA,  dB0t[ind[[i]],], method="kendall" ),
+    cor(Bscore.o[ind[[i]],-1]$MDS, dB0t[ind[[i]],], method="kendall" ),
+    cor(Bscore.o[ind[[i]],-1]$RDA, dB0t[ind[[i]],], method="kendall" )
+  )
+  setTxtProgressBar(pb, i)
+}
+close(pb)
+bootR.final <- do.call("rbind", bootR)
+bootR.final.CI <- apply(bootR.final, 2, function(x){
+    quantile(x, c(0.0005,0.005,0.025,0.975,0.995,0.9995))
+})
+save(bootR.final, file="bootR.final.Rdata")
+R.final.CI <- data.frame(
+  PCA = cor(Bscore.o[,-1]$PCA, dB0t, method="kendall" ),
+  FA  = cor(Bscore.o[,-1]$FA, dB0t, method="kendall" ),
+  MDS = cor(Bscore.o[,-1]$MDS, dB0t, method="kendall" ),
+  RDA = cor(Bscore.o[,-1]$RDA, dB0t, method="kendall" )
+)
+colnames(bootR.final) <- colnames(R.final.CI) <- paste0(
+  rep(c("HsGrass", "HsSpider", "HsInsect"), 4),
+  c(rep(".PCA", 3), rep(".FA", 3), rep(".MDS", 3), rep(".RDA", 3))
+)
+quartz(width=4, height=2.5)
+par(mar=c(2,5,0,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=10/12)
+  plot(NULL, xlim=c(0,9), ylim=c(0.2,0.8), xaxt="n", xlab="", ylab="95% bootstrap\nCIs for Kendall tau")
+  arrows(
+    seq(1,2,length=4),
+    bootR.final.CI %>% .[ "97.5%", grep("^HsGrass", colnames(.)) ] %>% as.matrix,
+    seq(1,2,length=4),
+    bootR.final.CI %>% .[ "2.5%", grep("^HsGrass", colnames(.)) ] %>% as.matrix,
+    col=2:5, lwd=2, length=0.05, angle=90, code=3
+  )
+  arrows(
+    seq(4,5,length=4),
+    bootR.final.CI %>% .[ "97.5%", grep("^HsSpider", colnames(.)) ] %>% as.matrix,
+    seq(4,5,length=4),
+    bootR.final.CI %>% .[ "2.5%", grep("^HsSpider", colnames(.)) ] %>% as.matrix,
+    col=2:5, lwd=2, length=0.05, angle=90, code=3
+  )
+  arrows(
+    seq(7,8,length=4),
+    bootR.final.CI %>% .[ "97.5%", grep("^HsInsect", colnames(.)) ] %>% as.matrix,
+    seq(7,8,length=4),
+    bootR.final.CI %>% .[ "2.5%", grep("^HsInsect", colnames(.)) ] %>% as.matrix,
+    col=2:5, lwd=2, length=0.05, angle=90, code=3
+  )
+  points(seq(1,2,length=4), R.final.CI %>% .[, grep("^HsGrass", colnames(.)) ] %>% as.matrix, pch=c("PCA","FA","MDS","RDA"))
+  points(seq(4,5,length=4), R.final.CI %>% .[, grep("^HsSpider", colnames(.)) ] %>% as.matrix, pch=c("PCA","FA","MDS","RDA"))
+  points(seq(7,8,length=4), R.final.CI %>% .[, grep("^HsInsect", colnames(.)) ] %>% as.matrix, pch=c("PCA","FA","MDS","RDA"))
+  axis(1, c(1.5,4.5,7.5), c("HsGrass", "HsSpider", "HsInsect"))
+quartz.save("slide/bootR-final.png", dpi=450, type="png")
+# quartz.save("slide/bootR-final.pdf", type="pdf")
+dev.off()
+
+
 ## multiple regression: diversity ~ area^1 + area^2 + interaction(among area^1)
 calc.relimp(lm(Bscore.o[[1]] ~ ., dG1t1), type=c("lmg", "car", "first"), rela=F)
 fit.o <-  vector(mode = "list", 8)
@@ -325,9 +390,11 @@ for(i in 1:length(fit.o)) {
 # 結合係數成data.frame: coefM.o
 {coefM.o <- multimerge(lapply(fit.o, function(x){data.frame(coef(x))}))} %T>% print %>%
   xtable(., digits=3, align = c("l", rep("r", ncol(.))) ) %>%
-  print(., NA.string="", booktabs=F, size="normalsize", math.style.negative=T,
+  print(., NA.string="", booktabs=F, size="small", math.style.negative=T,
     file="slide/迴歸係數.tex",
-    sanitize.colnames.function = function(x){gsub("(PCA|FA|MDS|RDA).(AIC|BIC)", "\\1\\\\textsubscript{\\2}", x)  },
+    sanitize.colnames.function = function(x){
+      gsub("^(PCA|FA|MDS|RDA).([[:graph:]]+)$", "\\1\\\\textsubscript{\\2}", x)
+    },
     sanitize.rownames.function = function(x){
         x[x=="(Intercept)"] <- "Int."
         x <- gsub("^([A-Z])$", "$ \\1 $", x)
@@ -340,10 +407,12 @@ for(i in 1:length(fit.o)) {
 
 # show vif table
 {coefVifM.o <- fit.o %>% lapply(., vif) %>% multimerge} %T>% print %>%
-  xtable(., digits=3, align = c("l", rep("r", ncol(.))) ) %>%
-  print(., NA.string="", booktabs=F, size="normalsize", math.style.negative=T,
+  xtable(., digits=1, align = c("l", rep("r", ncol(.))) ) %>%
+  print(., NA.string="", booktabs=F, size="small", math.style.negative=T,
     file="slide/VIF.tex",
-    sanitize.colnames.function = function(x){gsub("(PCA|FA|MDS|RDA).(AIC|BIC)", "\\1\\\\textsubscript{\\2}", x)  },
+    sanitize.colnames.function = function(x){
+      gsub("^(PCA|FA|MDS|RDA).([[:graph:]]+)$", "\\1\\\\textsubscript{\\2}", x)
+    },
     sanitize.rownames.function = function(x){
         x[x=="(Intercept)"] <- "Int."
         x <- gsub("^([A-Z])$", "$ \\1 $", x)
@@ -364,7 +433,7 @@ for(i in 1:length(fit.o)) {
 quartz(width=7, height=4)
 par(mar=c(4,3,1,0)+0.1, family = "Noto Sans CJK TC", mgp=c(3,1,0), cex=8/12, mfrow=c(2,4))
 for(i in 1:length(ri)) {
-  barplot( ri[[i]]@lmg, xlab="", ylab="R² 貢獻量", beside=T, ylim=c(0,0.2), las=2)
+  barplot( ri[[i]]@lmg, xlab="", ylab="R² 貢獻量", beside=T, ylim=c(0,0.15), las=2)
   title(names(fit.o)[i])
 }
 # quartz.save( "slide/beta相對貢獻量.pdf", type="pdf")
@@ -438,7 +507,9 @@ rbind(
   xtable(., digits=3, align = c("l", rep("r", ncol(.))) ) %>%
   print(., NA.string="—", booktabs=F, size="small", math.style.negative=T,
     file="slide/選擇表.tex",
-    sanitize.colnames.function = function(x){gsub("(PCA|FA|MDS|RDA).(AIC|BIC)", "\\1\\\\textsubscript{\\2}", x)  },
+    sanitize.colnames.function = function(x){
+      gsub("^(PCA|FA|MDS|RDA).([[:graph:]]+)$", "\\1\\\\textsubscript{\\2}", x)
+    },
     sanitize.rownames.function = function(x){
         x[x=="(Intercept)"] <- "Int."
         x <- gsub("([A-Z])2$", "$ \\1^2 $", x)
@@ -881,7 +952,7 @@ coefM.o[c("FA.1", "RDA.1")] %>% na.omit %>%
   xtable(., digits=5, align = c("l", rep("r", ncol(.))) ) %>%
   print(., NA.string="", booktabs=F, size="normalsize", math.style.negative=T,
     file="slide/印出迴歸式.tex",
-    sanitize.colnames.function = function(x){gsub("(PCA|FA|MDS|RDA).(AIC|BIC)", "\\1\\\\textsubscript{\\2}", x)  },
+    sanitize.colnames.function = function(x){gsub("(PCA|FA|MDS|RDA).([[:graph:]]+)", "\\1\\\\textsubscript{\\2}", x)  },
     sanitize.rownames.function = function(x){
         x[x=="(Intercept)"] <- "Int."
         x <- gsub("^([A-Z])$", "$ \\1 $", x)
@@ -894,82 +965,80 @@ coefM.o[c("FA.1", "RDA.1")] %>% na.omit %>%
 
 
 
-
-
 ############ 檢視預測
 預測排名.FA.1 <- data.frame(
   dt[, colnames(dt) %in% c("Location", "Spot", LETTERS[1:26])],
-  Rank木 = rank(-dt$HsWood),
-  Rank草 = rank(-dt$HsGrass),
-  Rank蛛 = rank(-dt$HsSpider),
-  Rank蟲 = rank(-dt$HsInsect),
-  預測名次 = rank(-dB0t.pred$FA.1)
+  # Rank木 = rank(-dt$HsWood),
+  # Rank草 = rank(-dt$HsGrass),
+  # Rank蛛 = rank(-dt$HsSpider),
+  # Rank蟲 = rank(-dt$HsInsect),
+  木 = cut(-dt$HsWood,10, 1:10),
+  草 = cut(-dt$HsGrass,10, 1:10),
+  蛛 = cut(-dt$HsSpider,10, 1:10),
+  蟲 = cut(-dt$HsInsect,10, 1:10),
+  預 = rank(-dB0t.pred$FA.1)
 )  %>%
   .[, !colnames(.) %in% c("G", "H", "K", "L", "NO", "DgsWood", "DgsGrass", "DgsSpider", "DgsInsect")]
 預測排名.FA.1 %>%
-  .[order(.$預測名次) , ] %>%
-  .[1:30 , ] %>%
+  .[order(.$預) , ] %>%
+  .[1:20 , ] %>%
   xtable(., digits = c(rep(0,13), rep(0,4), 0) ) %>%
-  print(., tabular.environment = "mytabular", size="tiny", include.rownames=F, file="slide/預測1.tex")
+  print(., tabular.environment = "mytabular", size="scriptsize", include.rownames=F, file="slide/預測1.tex")
+
 預測排名.FA.1 %>%
-  .[order(-.$預測名次) , ] %>%
-  .[1:30 , ] %>%
+  .[order(.$預) , ] %>%
+  .[21:40 , ] %>%
   xtable(., digits = c(rep(0,13), rep(0,4), 0) ) %>%
-  print(., tabular.environment = "mytabular", size="tiny", include.rownames=F, file="slide/預測2.tex")
+  print(., tabular.environment = "mytabular", size="scriptsize", include.rownames=F, file="slide/預測2.tex")
+
+預測排名.FA.1 %>%
+  .[order(-.$預) , ] %>%
+  .[1:20 , ] %>%
+  xtable(., digits = c(rep(0,13), rep(0,4), 0) ) %>%
+  print(., tabular.environment = "mytabular", size="scriptsize", include.rownames=F, file="slide/預測3.tex")
+
+預測排名.FA.1 %>%
+  .[order(-.$預) , ] %>%
+  .[21:40 , ] %>%
+  xtable(., digits = c(rep(0,13), rep(0,4), 0) ) %>%
+  print(., tabular.environment = "mytabular", size="scriptsize", include.rownames=F, file="slide/預測4.tex")
 
 預測排名.RDA.1 <- data.frame(
   dt[, colnames(dt) %in% c("Location", "Spot", LETTERS[1:26])],
-  Rank木 = rank(-dt$HsWood),
-  Rank草 = rank(-dt$HsGrass),
-  Rank蛛 = rank(-dt$HsSpider),
-  Rank蟲 = rank(-dt$HsInsect),
-  預測名次 = rank(-dB0t.pred$RDA.1)
+  # Rank木 = rank(-dt$HsWood),
+  # Rank草 = rank(-dt$HsGrass),
+  # Rank蛛 = rank(-dt$HsSpider),
+  # Rank蟲 = rank(-dt$HsInsect),
+  木 = cut(-dt$HsWood,10, 1:10),
+  草 = cut(-dt$HsGrass,10, 1:10),
+  蛛 = cut(-dt$HsSpider,10, 1:10),
+  蟲 = cut(-dt$HsInsect,10, 1:10),
+  預 = rank(-dB0t.pred$RDA.1)
 )  %>%
   .[, !colnames(.) %in% c("G", "H", "K", "L", "NO", "DgsWood", "DgsGrass", "DgsSpider", "DgsInsect")]
 預測排名.RDA.1 %>%
-  .[order(.$預測名次) , ] %>%
-  .[1:30 , ] %>%
+  .[order(.$預) , ] %>%
+  .[1:20 , ] %>%
   xtable(., digits = c(rep(0,13), rep(0,4), 0) ) %>%
-  print(., tabular.environment = "mytabular", size="tiny", include.rownames=F, file="slide/預測3.tex")
+  print(., tabular.environment = "mytabular", size="scriptsize", include.rownames=F, file="slide/預測5.tex")
+
 預測排名.RDA.1 %>%
-  .[order(-.$預測名次) , ] %>%
-  .[1:30 , ] %>%
+  .[order(.$預) , ] %>%
+  .[21:40 , ] %>%
   xtable(., digits = c(rep(0,13), rep(0,4), 0) ) %>%
-  print(., tabular.environment = "mytabular", size="tiny", include.rownames=F, file="slide/預測4.tex")
+  print(., tabular.environment = "mytabular", size="scriptsize", include.rownames=F, file="slide/預測6.tex")
 
+預測排名.RDA.1 %>%
+  .[order(-.$預) , ] %>%
+  .[1:20 , ] %>%
+  xtable(., digits = c(rep(0,13), rep(0,4), 0) ) %>%
+  print(., tabular.environment = "mytabular", size="scriptsize", include.rownames=F, file="slide/預測7.tex")
 
-
-
-#### 10-fold CV 找哪種降維方法最好 ----
-#### 不可能，因為無法訓練出 FA MDS 的模型來預測分數
-#### 改做 bootstrap kendall correlation 找哪種降維方法最好
-# k <- 10000
-# ind <- vector("list", k)
-# set.seed(52004800)#; set.seed(19821006); set.seed(124234545)
-# ind <- lapply(ind, function(x){return(sample(1:nrow(dB0t), replace=T))})
-# bootR <- vector("list", k)
-# pb <- txtProgressBar(min = 0, max = k, style = 3)
-# for(i in 1:k){
-#   bootR[[i]] <- data.frame(
-#     cor(Bscore.o[ind[[i]],-1]$PCA, dB0t[ind[[i]],], method="kendall" ),
-#     cor(Bscore.o[ind[[i]],-1]$FA,  dB0t[ind[[i]],], method="kendall" ),
-#     cor(Bscore.o[ind[[i]],-1]$MDS, dB0t[ind[[i]],], method="kendall" ),
-#     cor(Bscore.o[ind[[i]],-1]$RDA, dB0t[ind[[i]],], method="kendall" )
-#   )
-#   setTxtProgressBar(pb, i)
-# }
-# close(pb)
-# bootR.final <- do.call("rbind", bootR)
-# colnames(bootR.final) <- paste0(
-#   rep(c("HsWood", "HsGrass", "HsSpider", "HsInsect"), 4),
-#   c(rep(".PCA", 4), rep(".FA", 4), rep(".MDS", 4), rep(".RDA", 4))
-# )
-# apply(bootR.final, 2, function(x){
-#     quantile(x, c(0.0005,0.005,0.025,0.975,0.995,0.9995))
-# })
-# save(bootR.final, file="boorT.final.Rdata")
-
-
+預測排名.RDA.1 %>%
+  .[order(-.$預) , ] %>%
+  .[21:40 , ] %>%
+  xtable(., digits = c(rep(0,13), rep(0,4), 0) ) %>%
+  print(., tabular.environment = "mytabular", size="scriptsize", include.rownames=F, file="slide/預測8.tex")
 
 
 
@@ -979,53 +1048,43 @@ coefM.o[c("FA.1", "RDA.1")] %>% na.omit %>%
 
 
 ######## 回推未中心化的迴歸式
-round(coefM.o[c("PCA.AIC","RDA.AIC")], digits=10)
-finalFormula <- vector("list", 2)
-names(finalFormula) <- c("PCA.AIC","RDA.AIC")
+model.chosen <- "FA.1"
+tmp <- coefM.o[[ model.chosen ]]
+tmp[is.na(tmp)] <- 0
+names(tmp) <- rownames(coefM.o)
+names(tmp)[1] <- 1
+for(x in LETTERS[1:26]) {
+  names(tmp) %<>% gsub(
+    paste0("(",x,")"),
+    paste0("(\\1 - ", dG1t1Mean[x], ")"),
+    .
+  )
+}
+names(tmp) %<>% gsub("\\)\\(", "\\)*\\(", .)
+str <- paste(
+  paste("(", tmp, ")", sep=" ", cllapes=""),
+  names(tmp), sep="*", collapse=" + ")
+library(Ryacas)
+yacas(paste0("Simplify( " , gsub("I", "Z", str),  ")"))
 
-# dG1t1Mean
-i = 1
-finalFormula[[i]] <- list()
-finalFormula[[i]]$intercept <-
-  coefM.o["(Intercept)", i] +
-  -coefM.o["A", i] * dG1t1Mean["A"] +
-  -coefM.o["B", i] * dG1t1Mean["B"] +
-  -coefM.o["E", i] * dG1t1Mean["E"] +
-  -coefM.o["J", i] * dG1t1Mean["J"] +
-  coefM.o["A2", i] * dG1t1Mean["A"]^2 +
-  coefM.o["AD", i] * dG1t1Mean["A"] * dG1t1Mean["D"] +
-  coefM.o["AI", i] * dG1t1Mean["A"] * dG1t1Mean["I"] +
-  coefM.o["BE", i] * dG1t1Mean["B"] * dG1t1Mean["E"] +
-  coefM.o["BI", i] * dG1t1Mean["B"] * dG1t1Mean["I"] +
-  coefM.o["DI", i] * dG1t1Mean["D"] * dG1t1Mean["I"]
-finalFormula[[i]]$A <-
-  coefM.o["A", i] +
-  -2 * coefM.o["A2", i] * dG1t1Mean["A"] +
-  -coefM.o["AD", i] * dG1t1Mean["D"] +
-  -coefM.o["AI", i] * dG1t1Mean["I"]
-finalFormula[[i]]$A2 <-
-  coefM.o["A2", i]
-finalFormula[[i]]$B <-
-  coefM.o["B", i] +
-  -coefM.o["BE", i] * dG1t1Mean["E"] +
-  -coefM.o["BI", i] * dG1t1Mean["I"]
-finalFormula[[i]]$D <-
-  -coefM.o["AD", i] * dG1t1Mean["A"] +
-  -coefM.o["DI", i] * dG1t1Mean["I"]
-finalFormula[[i]]$E <-
-  coefM.o["E", i] +
-  -coefM.o["BE", i] * dG1t1Mean["B"]
-finalFormula[[i]]$I <-
-  -coefM.o["AI", i] * dG1t1Mean["A"] +
-  -coefM.o["BI", i] * dG1t1Mean["B"] +
-  -coefM.o["DI", i] * dG1t1Mean["D"]
-finalFormula[[i]]$J <-
-  coefM.o["J", i] +
-  -coefM.o["AI", i] * dG1t1Mean["A"]
-finalFormula.PCA.AIC <- do.call("c", finalFormula[[1]])
-t(finalFormula.PCA.AIC) %>% xtable
-
-  coefM.o["A2", 1] * dG1t1Mean["A"] +
+model.chosen <- "RDA.1"
+tmp <- coefM.o[[ model.chosen ]]
+tmp[is.na(tmp)] <- 0
+names(tmp) <- rownames(coefM.o)
+names(tmp)[1] <- 1
+for(x in LETTERS[1:26]) {
+  names(tmp) %<>% gsub(
+    paste0("(",x,")"),
+    paste0("(\\1 - ", dG1t1Mean[x], ")"),
+    .
+  )
+}
+names(tmp) %<>% gsub("\\)\\(", "\\)*\\(", .)
+str <- paste(
+  paste("(", tmp, ")", sep=" ", cllapes=""),
+  names(tmp), sep="*", collapse=" + ")
+library(Ryacas)
+yacas(paste0("Simplify( " , gsub("I", "Z", str),  ")"))
 
 
 
