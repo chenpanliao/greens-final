@@ -11,7 +11,7 @@ require(ggplot2)
 require(hydroGOF)
 require(car)
 library(MuMIn)
-mds.try.n <- 20
+mds.try.n <- 30
 NRMSE <- function(sim, obs){
   hydroGOF::rmse(sim, obs) / sd(obs)
 }
@@ -299,7 +299,7 @@ dev.off()
 
 
 #### 改做 bootstrap kendall correlation 找哪種降維方法最好
-k <- 5000
+k <- 2000
 ind <- vector("list", k)
 set.seed(52004800)#; set.seed(19821006); set.seed(124234545)
 ind <- lapply(ind, function(x){return(sample(1:nrow(dB0t), replace=T))})
@@ -363,7 +363,9 @@ quartz.save("slide/bootR-final.png", dpi=450, type="png")
 dev.off()
 
 
-## multiple regression: diversity ~ area^1 + area^2 + interaction(among area^1)
+
+
+#### multiple regression: diversity ~ area^1 + area^2 + interaction(among area^1)
 calc.relimp(lm(Bscore.o[[1]] ~ ., dG1t1), type=c("lmg", "car", "first"), rela=F)
 fit.o <-  vector(mode = "list", 8)
 names(fit.o) <- paste(
@@ -694,7 +696,7 @@ rbind(
   `Kendall tau` = cor(Bscore.TD.pred.求最佳迴歸法, Bscore.VD.求最佳迴歸法, method="kendall") %>% diag
   )  %T>% print %>%
     xtable(., digits=3, align = c("l", rep("r", ncol(.))) ) %>%
-    print(., NA.string="—", booktabs=F, size="small", math.style.negative=T,
+    print(., NA.string="—", booktabs=F, size="normalsize", math.style.negative=T,
       file="slide/CV求最佳迴歸法.tex",
       sanitize.colnames.function = function(x){gsub("(PCA|FA|MDS|RDA).(1|F)", "\\1\\\\textsubscript{\\2}", x)  },
       sanitize.rownames.function = function(x){
@@ -815,7 +817,7 @@ rbind(
   `Kendall tau` = cor(Bscore.TD.pred.最佳解釋變數組, Bscore.VD.最佳解釋變數組, method="kendall") %>% diag
   )  %T>% print %>%
     xtable(., digits=3, align = c("l", rep("r", ncol(.))) ) %>%
-    print(., NA.string="—", booktabs=F, size="small", math.style.negative=T,
+    print(., NA.string="—", booktabs=F, size="normalsize", math.style.negative=T,
       file="slide/CV-最佳解釋變數組.tex",
       sanitize.colnames.function = function(x){gsub("(PCA|FA|MDS|RDA).(1|F)", "\\1\\\\textsubscript{\\2}", x)  },
       sanitize.rownames.function = function(x){
@@ -845,7 +847,6 @@ dev.off()
 
 #### 10-fold CV 找8種求解法何者較佳
 #### 目標：求最佳整套求解方式（包括降維與迴歸方式）
-mds.try.n <- 20
 Bscore.TD <- list()
 Bscore.VD <- list()
 fit.TD <- list()
@@ -922,7 +923,7 @@ rbind(
   `Kendall tau` = cor(Bscore.TD.pred.final, Bscore.VD.final, method="kendall") %>% diag
   )  %T>% print %>%
     xtable(., digits=3, align = c("l", rep("r", ncol(.))) ) %>%
-    print(., NA.string="—", booktabs=F, size="small", math.style.negative=T,
+    print(., NA.string="—", booktabs=F, size="normalsize", math.style.negative=T,
       file="slide/CV-final.tex",
       sanitize.colnames.function = function(x){gsub("(PCA|FA|MDS|RDA).(1|F)", "\\1\\\\textsubscript{\\2}", x)  },
       sanitize.rownames.function = function(x){
@@ -976,7 +977,7 @@ coefM.o[c("FA.1", "RDA.1")] %>% na.omit %>%
   草 = cut(-dt$HsGrass,10, 1:10),
   蛛 = cut(-dt$HsSpider,10, 1:10),
   蟲 = cut(-dt$HsInsect,10, 1:10),
-  預 = rank(-dB0t.pred$FA.1)
+  預 = rank(-dB0t.pred$FA.1, ties.method="min")
 )  %>%
   .[, !colnames(.) %in% c("G", "H", "K", "L", "NO", "DgsWood", "DgsGrass", "DgsSpider", "DgsInsect")]
 預測排名.FA.1 %>%
@@ -1013,7 +1014,7 @@ coefM.o[c("FA.1", "RDA.1")] %>% na.omit %>%
   草 = cut(-dt$HsGrass,10, 1:10),
   蛛 = cut(-dt$HsSpider,10, 1:10),
   蟲 = cut(-dt$HsInsect,10, 1:10),
-  預 = rank(-dB0t.pred$RDA.1)
+  預 = rank(-dB0t.pred$RDA.1, ties.method="min")
 )  %>%
   .[, !colnames(.) %in% c("G", "H", "K", "L", "NO", "DgsWood", "DgsGrass", "DgsSpider", "DgsInsect")]
 預測排名.RDA.1 %>%
