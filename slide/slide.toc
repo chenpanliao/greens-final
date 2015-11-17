@@ -1,0 +1,5 @@
+\beamer@endinputifotherversion {3.36pt}
+\beamer@sectionintoc {1}{現有資料檢查}{3}{0}{1}
+\beamer@sectionintoc {2}{求解侯選之TBAF建構分數}{9}{0}{2}
+\beamer@sectionintoc {3}{評價不同侯選TBAF構造分數}{18}{0}{3}
+\beamer@sectionintoc {4}{預測結果探討}{27}{0}{4}

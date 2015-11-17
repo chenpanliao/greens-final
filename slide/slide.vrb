@@ -1,0 +1,15 @@
+\frametitle{生態資料降維}
+\begin{columns}[onlytextwidth, c]
+^^I\begin{column}{0.5\textwidth}
+^^I^^I\includegraphics[trim=100 100 100 100, width=1\textwidth]{原始資料降維分數.png}
+^^I\end{column}
+^^I\begin{column}{0.45\textwidth}
+^^I^^I\includegraphics[width=1\textwidth]{bootR-final.png}
+^^I^^I\begin{itemize}
+^^I^^I^^I\item 4種降維方法間呈高度相關
+^^I^^I^^I\item 唯有FA與草本多樣性的相關較高
+^^I^^I^^I\item RDA強調蜘蛛多樣性，其它方法也不太差
+^^I^^I^^I\item PCA和MDS與昆蟲多樣性的相關較高
+^^I^^I\end{itemize}
+^^I\end{column}
+\end{columns}
